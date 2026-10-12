@@ -1,4 +1,4 @@
-# Mole 1.6.0
+# Mole 1.6.1
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -109,11 +109,13 @@ Mole works normally without a modem or companion. If you want to watch it from a
 
 1. Equip the turtle with a **wireless or Ender modem**, keeping its pickaxe equipped.
 2. Start the companion on a nearby computer with a monitor and wireless/Ender modem. Press **P** on that computer to open pairing.
-3. On the turtle, run `mole companion` and choose **1**. Mole checks for a wireless modem, then asks for the station computer ID and pairing code shown on the companion.
-4. Confirm the turtle on the companion computer and choose its name. Mole remembers the pairing.
+3. On the turtle, run `mole companion` and choose **1**. Mole walks through the steps, checks its wireless modem, then asks for the clearly labelled station computer ID and six-digit pairing code. Missing hardware and invalid entries can be retried without restarting setup.
+4. Confirm the turtle on the companion computer and choose its name. Both screens confirm the connection. Mole remembers the pairing.
 5. Use `mole new` or `mole resume` as usual. No extra wireless questions appear during quarry setup.
 
-The station can also show an exact `mole pair <station ID> <code>` command as a shortcut to the same pairing flow. Choose **2** in `mole companion` to disable reporting, or **3** to check the modem and pairing.
+Pairing stays open for five minutes. On a first launch without paired turtles, the companion offers to pair your first turtle automatically. Until Mole runs, it shows **Paired - waiting for Mole to run** instead of implying a lost connection.
+
+You can also enter `mole pair <station ID> <code>` on the turtle as a shortcut to the same pairing flow. Choose **2** in `mole companion` to disable reporting, or **3** to check the modem and send a connection check to the paired station.
 
 When enabled, Mole reports tracked position, fuel, job state, recent messages, and unfamiliar blocks it successfully mines. Vanilla ores and configured trash are excluded from unfamiliar-block notices. Block IDs and counts appear on the companion; mining decisions stay the same.
 

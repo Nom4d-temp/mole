@@ -1,6 +1,6 @@
--- Mole v1.6.0: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.0'
+local VERSION='1.6.1'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -294,48 +294,101 @@ function net.run(main)
   end
   return parallel.waitForAny(mining,listener)
 end
+function net.checkConnection(profile)
+  local nonce=tostring(net.clock())..'-'..math.random(100000,999999)
+  local ok,sent=pcall(rednet.send,profile.station,{v=1,kind='ping',token=profile.token,nonce=nonce},net.protocol)
+  if not ok or not sent then return false end
+  local deadline=net.clock()+10
+  while net.clock()<deadline do
+    local id,msg=rednet.receive(net.protocol,1)
+    if id==profile.station and type(msg)=='table' and msg.v==1 and msg.kind=='pong' and msg.token==profile.token and msg.nonce==nonce then return true end
+  end
+  return false
+end
 function net.menu(station,code)
   while true do
+    local current=net.readProfile()
     print('Mole companion (optional)')
-    print(net.readProfile() and 'Reporting: enabled and paired' or 'Reporting: off')
-    print('1 Pair / enable a companion')
+    print(current and 'Paired station ID: '..current.station or 'Reporting: off')
+    print(current and '1 Pair / re-pair a station' or '1 Pair / enable a companion')
     print('2 Disable wireless reporting')
-    print('3 Check modem and pairing')
+    print('3 Check connection')
     print('Enter or q: finish')
     local choice=station and '1' or answer('Choose:'):lower()
     if choice=='' or choice=='q' then return end
     if choice=='2' then
-      local p=net.readProfile() or {};p.enabled=false;writeFile(ROOT..'/companion',p);net.active=false;net.profile=nil
+      local profile=current or {};profile.enabled=false;writeFile(ROOT..'/companion',profile);net.active=false;net.profile=nil
       print('Wireless reporting disabled.');return
     elseif choice=='3' then
       local ok,name=pcall(net.modem)
-      print(ok and name and 'Wireless modem found: '..name or 'No wireless/Ender modem equipped.')
-      local p=net.readProfile();if p then print('Paired station: '..p.station) end
+      if not ok or not name then print('No wireless/Ender modem found.')
+      elseif not current then print('Modem found. Choose 1 to pair.')
+      else
+        print('Checking station ID '..current.station..'...')
+        print(net.checkConnection(current) and 'Connection checked. Station replied.' or 'No station reply. Check range/chunks.')
+      end
     elseif choice=='1' then
+      print('Step 1/4: check turtle equipment')
       print('Keep this turtle near the station.')
-      print('Equip a wireless or Ender modem.');print('Keep the pickaxe equipped too.')
-      local ok,name=pcall(net.modem)
-      if not ok or not name then print('No wireless/Ender modem found.');print('Equip it, then try mole companion.');return end
+      print('Keep pickaxe + wireless/Ender modem.')
+      while true do
+        local ok,name=pcall(net.modem);if ok and name then print('Wireless modem found.');break end
+        print('No wireless/Ender modem found.')
+        print('Equip it, then Enter to retry.')
+        if answer('Enter: retry, q: cancel:'):lower()=='q' then return end
+      end
+      print('Step 2/4: enter station details')
       print('On the companion computer, press P.')
-      local id=tonumber(station or answer('Station computer ID (q cancels):'))
-      if not net.validNumber(id) or id<0 then print('Pairing cancelled. Use a whole ID.');return end
-      local pin=tostring(code or answer('Pairing code (q cancels):'))
-      if not pin:match('^%d%d%d%d%d%d$') then print('Pairing cancelled. Use six digits.');return end
+      print('Its screen shows station ID + code.')
+      local id
+      while true do
+        local raw=station or answer('Station computer ID (q cancels):')
+        if tostring(raw):lower()=='q' then return end
+        id=tonumber(raw);if net.validNumber(id) and id>=0 then break end
+        print('Use a whole station ID, or q.')
+        if station then return end
+      end
+      local pin
+      while true do
+        pin=tostring(code or answer('Pairing code (q cancels):'))
+        if pin:lower()=='q' then return end
+        if pin:match('^%d%d%d%d%d%d$') then break end
+        print('Use the six digits shown, or q.')
+        if code then return end
+      end
       local hello={v=1,kind='pair_hello',code=pin,wireless=true,name=os.getComputerLabel and os.getComputerLabel() or 'Mole '..os.getComputerID()}
-      local sent=pcall(rednet.send,id,hello,net.protocol)
-      if not sent then print('Could not send. Pairing kept off.');return end
-      print('Confirm this turtle on the station.');print('Waiting up to 90 seconds...')
-      local deadline=net.clock()+90;local nextHello=net.clock()+5
+      local ok,sent=pcall(rednet.send,id,hello,net.protocol)
+      if not ok or not sent then print('No message sent. Check the modem.');return end
+      print('Step 3/4: confirm on the computer')
+      print('Station ID: '..id..' | Code: '..pin)
+      print('Check turtle #'..os.getComputerID()..', then Y.')
+      print('Choose its name on that computer.')
+      print('Waiting up to five minutes...')
+      local deadline=net.clock()+300;local nextHello=net.clock()+5
       while net.clock()<deadline do
         local received,msg=rednet.receive(net.protocol,1)
         if received==id and type(msg)=='table' and msg.v==1 and msg.kind=='paired' and msg.code==pin and msg.station==id
           and type(msg.token)=='string' and #msg.token>=8 and #msg.token<=96 then
           writeFile(ROOT..'/companion',{enabled=true,station=id,token=msg.token})
-          print('Paired. Wireless reporting enabled.');print('Use mole new or mole resume to mine.');return
+          print('Step 4/4: checking the connection')
+          local verified=false;local finish=net.clock()+15;local nextReady=0
+          while net.clock()<finish do
+            if net.clock()>=nextReady then
+              pcall(rednet.send,id,{v=1,kind='pair_ready',token=msg.token,code=pin},net.protocol);nextReady=net.clock()+3
+            end
+            local sender,reply=rednet.receive(net.protocol,1)
+            if sender==id and type(reply)=='table' and reply.v==1 and reply.kind=='pair_verified' and reply.token==msg.token and reply.code==pin then verified=true;break end
+          end
+          print(verified and 'Connection checked. Pairing complete.' or 'Pairing saved; final reply not seen.')
+          if not verified then print('Use option 3 to check connection.') end
+          print('Use mole new or mole resume to mine.');return
         end
         if net.clock()>=nextHello then pcall(rednet.send,id,hello,net.protocol);nextHello=net.clock()+5 end
       end
-      print('No pairing reply. Keep both nearby.');print('Check chunks, modems, and code.');print('Previous pairing kept, if present.');return
+      print('Confirmation not completed.')
+      print('Check station screen, range/chunks.')
+      print('Press P there, then try pairing again.')
+      print('Previous pairing kept, if present.');return
     else print('Choose 1, 2, 3, or Enter.') end
   end
 end
