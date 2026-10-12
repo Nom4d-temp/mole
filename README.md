@@ -69,7 +69,7 @@ If you already use your own startup program, the miner keeps it. To make that ex
 
 Mole digs one-block-high tunnels, leaving two columns between them and three blocks between tunnel levels. It checks neighboring blocks and follows connected ores and other non-trash blocks within your chosen area. Ordinary stone is mined only when needed for movement. Some hidden ores and very large veins may be missed.
 
-It returns to the chest when inventory or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are left alone; keep the quarry and its one-block emergency border clear of builds.
+It returns to the chest when inventory is full or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are left alone; keep the quarry and its one-block emergency border clear of builds.
 
 At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. The default target is **2,560 units**—32 coal or charcoal from empty—and increases for longer routes. Finished jobs do not refuel.
 
