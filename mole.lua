@@ -1,6 +1,6 @@
--- Mole v1.4.9: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.10: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.9'
+local VERSION='1.4.10'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -283,7 +283,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.9 - first-time setup')
+  print('\nMole 1.4.10 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -1252,7 +1252,7 @@ local function stoppedAdvice(err)
     log('Waiting at the starting chest. Follow the instructions above, then run mole.')
   else
     log('Progress saved at '..depthText(s.p)..'. Check the reported obstruction or error, then run mole to retry. Do not move or turn the turtle.')
-    log('If it repeats, keep the exact error text when asking for help. Use mole reset only after retrieval and repositioning.')
+    log('Use mole reset only after retrieving and repositioning the turtle.')
   end
 end
 local function attemptEmergency(why)
