@@ -180,3 +180,7 @@ Mole skips searching inventory for fuel when it already has enough, and stops co
 ## Testing
 
 Mole has passed offline mock tests for setup, tunnel mining, ore veins, returning home, and recovery. Start your Minecraft test with **3 × 3 × 6**.
+
+## AI disclosure
+
+Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
