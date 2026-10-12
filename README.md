@@ -151,31 +151,11 @@ wget https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua mole
 
 Run `mole` once. Future updates can use `mole update`. Updates become available when the newer `mole.lua` is uploaded to the repository's `main` branch.
 
-### Moving from the old quarry program to Mole
+## Config file
 
-1. Stop the old program with Ctrl+T, then run `quarry return` and wait for the chest.
-2. Download Mole using the command above.
-3. Run `mole`.
+Mole stores its settings in `quarry-data/config` on the turtle. Most users can use the setup questions and `mole settings`. For advanced changes, stop Mole with Ctrl+T, then type `edit quarry-data/config`.
 
-**Keep the `quarry-data` folder.** Mole uses it to keep your saved location and progress. It updates the old automatic restart script when it recognizes one of our scripts. A custom startup script can resume Mole with `shell.run("mole")`.
-
-An unfinished old excavation job switches to tunnel mining at the chest, restarting its current vertical level with the new pattern. A finished job stays finished; use `mole new` to set up the next one.
-
-## For curious players
-
-The turtle saves progress after moves and turns. If a move was interrupted, it tries the possible saved positions and finds its original chest without GPS. It keeps extra fuel for this trip and does not dig while uncertain. Once home, it replays the saved route to continue the vein or tunnel step.
-
-Recovery needs a clear return route, its original chest, and enough fuel. If a movement is interrupted during emergency excavation, Mole must confirm its position before digging again; a blocked recovery route can still need clearing. Matching chest type and size is not a unique identity, which is why the starting chest should be the only matching inventory near the recovery area. Repeated interruptions, changed terrain, or a missing chest can still need help.
-
-More advanced settings live in `quarry-data/config`: allowed fuel items, protected blocks, fuel reserves, retries, and vein search limits. Job dimensions are fixed once a job starts.
-
-Water and lava are traversable. For unfamiliar blocks, including modded liquids such as oil, Mole first tries a saved movement before attempting to mine. A successfully traversed block type is remembered for the current run and is left out of ore-vein searches. This also works on return trips and during recovery; recovery never digs. Failed movement attempts do not permanently classify a block type as blocked. Protected blocks and detected machines are checked before probing. The program does not seal liquids or collect lava in buckets. It avoids known protected blocks and detected machine peripherals, but not every modded machine is detectable; keep it away from builds you want to preserve.
-
-## Faster mining in 1.3.11
-
-Mole takes the shortest turn to face a block and starts new scans from its current facing. All six neighboring directions are still checked where they fall inside the mining area. Saved scans and automatic chest recovery support both left and right turns.
-
-Mole skips searching inventory for fuel when it already has enough, and stops counting empty slots once it finds two. It still checks its fuel reserve and available space. Return trips and trips back to work use the shortest available route through recorded tunnels. Every move still checks for obstacles. If it cannot reach its work position, Mole returns home and pauses instead of waiting underground. These routes help avoid new obstacles on return trips; digging a new tunnel can still encounter bedrock or other unbreakable blocks.
+The file contains the trash list, allowed fuel items, protected blocks, fuel target and reserves, movement retries, and ore-vein search limits. Make a backup before editing, keep the existing format, and save before running `mole` again. Changing dimensions in this file does not resize a saved job; use `mole new` for a different size. `mole reset` restores all default settings and clears the saved job.
 
 ## Testing
 
