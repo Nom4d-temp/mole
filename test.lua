@@ -3,8 +3,11 @@ local programFile=assert(io.open('mole.lua') or io.open('mole/mole.lua'))
 local program=programFile:read('*a');programFile:close()
 local scenarioCount=0
 local originalPrint=print
+local originalClock=os.clock
 local function scenario(opts)
   scenarioCount=scenarioCount+1
+  local mockTime=0
+  os.clock=opts.slowProgress and function() mockTime=mockTime+21;return mockTime end or originalClock
   fs=nil;turtle=nil;peripheral=nil;textutils=nil;read=nil;write=nil;print=originalPrint;collectgarbage('collect')
   http=nil
   local messages={}
@@ -175,9 +178,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.8','9.0.0')
+    local source=program:gsub('1%.4%.9','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.8','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.4%.9','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -319,6 +322,7 @@ local function scenario(opts)
   end
   if opts.deleteCorrupt then files['quarry-data/config']='damaged config' else run() end
   if opts.fuelChest then
+    if opts.expectedPulls==0 then assert(not table.concat(messages,'\n'):find('Fuel after chest refueling:',1,true),'Reported refueling when no fuel was consumed') end
     assert(f==opts.expectedFuel,'Wrong fuel amount from chest sequence: '..f)
     assert(pulls==opts.expectedPulls,'Scanned beyond fuel sequence or pulled too much')
     assert(bucketsReturned==(opts.expectedBuckets or 0),'Lost empty buckets')
@@ -426,6 +430,7 @@ local function scenario(opts)
       local removed=0; for _ in pairs(dug) do removed=removed+1 end
       assert(removed<width*length*depth/2,'Excavated too much trash')
     end
+    if opts.slowProgress then assert(table.concat(messages,'\n'):find('Searching a deposit:',1,true),'Long deposit search did not report activity') end
     assert(p.x==0 and p.y==0 and p.z==0,'Not home')
     assert(s.layoutVersion==2,'Tunnel layout not recorded')
     if opts.startY then
@@ -477,7 +482,7 @@ scenario({crashAfter=true,at=45,recoveryMoveCrash=true,recoveryAfter=true});
 scenario({crashAfter=true,at=45,starve=true});
 scenario({inputs={'','','64',''}});
 scenario({inputs={'bad','0','3','3','','64','6',''}});
-scenario({inputs={'q'},cancel=true});
+scenario({inputs={'q'},cancel=true});scenario({slowProgress=true});
 scenario({existingStartup=true});scenario({legacy=true});
 scenario({width=16,length=16,depth=6});
 scenario({width=1,length=1,depth=1});

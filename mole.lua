@@ -1,6 +1,6 @@
--- Mole v1.4.8: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.9: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.8'
+local VERSION='1.4.9'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -283,7 +283,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.8 - first-time setup')
+  print('\nMole 1.4.9 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -680,12 +680,12 @@ local function organizeFuel(inv)
         for i=inv.size(),1,-1 do if i~=target and not contents[i] then empty=i;break end end
         if not empty then failure('CHEST_FULL','Chest needs an empty slot to organize fuel. Make room and run mole.') end
         local moved=inv.pushItems('front',target,contents[target].count,empty)
-        if moved~=contents[target].count then failure('CHEST_CHANGED','Chest changed while moving output away from fuel; retry.') end
+        if moved~=contents[target].count then failure('CHEST_CHANGED','Waiting at the starting chest. Stop other machines or players changing this chest, make room for output, then run mole.') end
       end
       local item=inv.list()[source]
-      if not item or not c.fuel[item.name] then failure('CHEST_CHANGED','Chest fuel changed during organization; retry.') end
+      if not item or not c.fuel[item.name] then failure('CHEST_CHANGED','Waiting at the starting chest. Keep fuel together in the reserved slots from slot 1 and stop other chest transfers, then run mole.') end
       local moved=inv.pushItems('front',source,item.count,target)
-      if moved~=item.count then failure('CHEST_CHANGED','Could not organize the chest fuel; retry.') end
+      if moved~=item.count then failure('CHEST_CHANGED','Waiting at the starting chest. Leave an empty chest slot and stop other chest transfers, then run mole.') end
     end
   end
 end
@@ -715,32 +715,33 @@ local function chestFuel(target,minimum)
     if not item or not c.fuel[item.name] then break end
     sequence[#sequence+1]={slot=i,name=item.name,count=item.count}
   end
+  local initialFuel=fuel()
   local problem
   for _,entry in ipairs(sequence) do
     if fuel()>=target then break end
     local listed=inv.list()
     for i=1,entry.slot-1 do
-      if listed[i] then problem='Chest fuel order changed while refueling; check the first slots and retry.'; break end
+      if listed[i] then problem='Fuel slots changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run mole.'; break end
     end
     if problem then break end
     local live=listed[entry.slot]
     if not live or live.name~=entry.name or live.count~=entry.count then
-      problem='Chest fuel changed while refueling; check the first slots and retry.'; break
+      problem='Fuel changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run mole.'; break
     end
     local slot
     for i=1,16 do if turtle.getItemCount(i)==0 then slot=i; break end end
-    if not slot then problem='No space for more fuel or empty buckets; rearrange the chest fuel and retry.'; break end
+    if not slot then problem='Not enough turtle inventory space for fuel or empty buckets. Make room in the chest and turtle inventory, then run mole.'; break end
     turtle.select(slot)
-    if not turtle.suck(math.min(entry.count,64)) then problem='Could not take the next fuel item; check the chest and retry.'; break end
+    if not turtle.suck(math.min(entry.count,64)) then problem='Could not take fuel from the chest. Check that it can supply items and stop other transfers, then run mole.'; break end
     local taken=turtle.getItemDetail(slot)
     if not taken or taken.name~=entry.name or turtle.getItemCount(slot)~=math.min(entry.count,64) then
-      problem='Chest extraction did not match the fuel sequence; items will be returned. Check the chest and retry.'; break
+      problem='Received unexpected items from the chest; returning them. Stop other transfers and arrange fuel from slot 1, then run mole.'; break
     end
     local before=fuel(); refuelTo(target)
-    if fuel()==before then problem='This configured fuel cannot refuel the turtle; check the fuel list.'; break end
+    if fuel()==before then problem='The configured fuel item does not refuel this turtle. Supply coal, charcoal, or lava buckets; correct custom fuel entries in quarry-data/config, then run mole.'; break end
     -- Keep empty buckets and unused fuel onboard until the sequence finishes.
   end
-  log('Fuel after chest refueling: '..fuelText()..' (target: '..target..').')
+  if fuel()>initialFuel then log('Fuel after chest refueling: '..fuelText()..' (target: '..target..').') end
   unload()
   organizeFuel(inv)
   if problem then failure('CHEST_CHANGED',problem) end
@@ -838,6 +839,22 @@ for band=0,math.ceil(c.depth/3)-1 do
   previousDepth=y
 end
 local total=#plan
+local progressInterval=math.max(8,math.min(64,math.ceil(total/20)))
+local lastProgressTime=os.clock()
+local lastVein;local lastVeinCount=0
+local function reportProgress(deposit)
+  local now=os.clock()
+  if deposit then
+    if lastVein~=s.vein then lastVein=s.vein;lastVeinCount=0 end
+    if s.vein.count-lastVeinCount<16 and now-lastProgressTime<20 then return end
+    lastVeinCount=s.vein.count
+    log('Searching a deposit: '..s.vein.count..' non-trash blocks followed; '..depthText(s.p)..'. No action needed.')
+  else
+    if (s.index-1)%progressInterval~=0 and now-lastProgressTime<20 then return end
+    log('Mining: tunnel positions completed '..(s.index-1)..'/'..total..'; '..depthText(s.p))
+  end
+  lastProgressTime=now
+end
 local function cell(i) return plan[i] end
 -- Old excavation checkpoints used a different cell numbering scheme.
 -- Remember their vertical band; convert only after reaching the chest.
@@ -896,6 +913,7 @@ local function vein()
         else f.next=f.next+1; save() end
       else f.next=f.next+1; save() end
     end
+    reportProgress(true)
     refuelTo(reserve(#s.route+1)+4)
     if freeSlots()<2 or fuel()<=reserve(#s.route+1)+3 then
       requestService(freeSlots()<2 and 'Inventory nearly full' or 'Fuel reserve reached',false); return false
@@ -1228,6 +1246,15 @@ local emergencyFailures={NO_ROUTE=true,NO_HOME_ROUTE=true,INSUFFICIENT_RETURN_FU
   RETURN_FUEL_LOW=true,NO_CHEST_CONFIRMATION=true,RETURN_RECOVERY_FUEL=true,RECOVERY_FUEL_LOW=true,
   MISSING_CHEST=true,INVENTORY_FULL=true,FUEL_RESERVE=true,NO_FUEL=true}
 local function fallbackReason(why) return emergencyFailures[failureCode(why)]==true end
+local function stoppedAdvice(err)
+  local code=failureCode(err)
+  if code=='CHEST_FULL' or code=='CHEST_CHANGED' or code=='NEED_FUEL' then
+    log('Waiting at the starting chest. Follow the instructions above, then run mole.')
+  else
+    log('Progress saved at '..depthText(s.p)..'. Check the reported obstruction or error, then run mole to retry. Do not move or turn the turtle.')
+    log('If it repeats, keep the exact error text when asking for help. Use mole reset only after retrieval and repositioning.')
+  end
+end
 local function attemptEmergency(why)
   local ok,err=pcall(function() if s.phase~='emergency' then startEmergency(tostring(why)) end;emergencyAscent() end)
   if not ok then log('Emergency escape saved: '..tostring(err)..'. Run mole to retry.') end
@@ -1289,7 +1316,7 @@ local ok,err=pcall(function()
       end
       if vein() then
         s.index=s.index+1; save()
-        if s.index%16==0 then log('Mining: tunnel positions completed '..(s.index-1)..'/'..total..'; '..depthText(s.p)) end
+        reportProgress(false)
         if s.index<=total and plan[s.index].band~=plan[s.index-1].band then
           log('Tunnel level finished. Returning to the chest.')
           -- Reset to origin each band: shorter, predictable return paths.
@@ -1311,8 +1338,8 @@ if not ok then
     local safe,why=pcall(service)
     if not safe then
       if fallbackReason(why) then attemptEmergency(why)
-      else log('Return stopped: '..tostring(why)..'. Position '..key(s.p)..'; run mole after fixing.') end
+      else log('Return stopped: '..tostring(why));stoppedAdvice(why) end
     end
   elseif fallbackReason(err) then attemptEmergency(err)
-  else log('Job saved at '..key(s.p)..'; fix issue and run mole.') end
+  else stoppedAdvice(err) end
 end
