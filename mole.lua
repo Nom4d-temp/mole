@@ -1,6 +1,6 @@
--- Mole v1.5.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.5.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.2'
+local VERSION='1.5.3'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -308,7 +308,7 @@ if fresh then
   local width=numberQuestion('Width in blocks',c.width,64); if not width then return end
   local startY
   while true do
-    local raw=answer('Current turtle Y coordinate (required):')
+    local raw=answer('Y coordinate of turtle (required):')
     if raw:lower()=='q' then return end
     local n=tonumber(raw)
     if n and n==n and n~=math.huge and n~=-math.huge and n%1==0 then startY=n; break end
