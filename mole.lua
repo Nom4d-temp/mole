@@ -1,6 +1,6 @@
--- Mole v1.6.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.2'
+local VERSION='1.6.3'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -313,12 +313,20 @@ function net.menu(station,code)
     print(current and '1 Pair / re-pair a station' or '1 Pair / enable a companion')
     print('2 Disable wireless reporting')
     print('3 Check connection')
+    print('4 Unpair this turtle')
     print('Enter or q: finish')
     local choice=station and '1' or answer('Choose:'):lower()
     if choice=='' or choice=='q' then return end
     if choice=='2' then
       local profile=current or {};profile.enabled=false;writeFile(ROOT..'/companion',profile);net.active=false;net.profile=nil
       print('Wireless reporting disabled.');return
+    elseif choice=='4' then
+      if fs.exists(ROOT..'/companion') then fs.delete(ROOT..'/companion') end
+      net.active=false;net.profile=nil;net.pending=nil;net.queue={}
+      print('Turtle unpaired. Reporting is off.')
+      print('Quarry job and settings kept.')
+      print('Use mole companion, then 1 to pair.')
+      return
     elseif choice=='3' then
       local ok,name=pcall(net.modem)
       if not ok or not name then print('No wireless/Ender modem found.')
@@ -389,7 +397,7 @@ function net.menu(station,code)
       print('Check station screen, range/chunks.')
       print('Press P there, then try pairing again.')
       print('Previous pairing kept, if present.');return
-    else print('Choose 1, 2, 3, or Enter.') end
+    else print('Choose 1, 2, 3, 4, or Enter.') end
   end
 end
 pcall(net.setup)

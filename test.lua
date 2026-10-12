@@ -255,9 +255,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.2','9.0.0')
+    local source=program:gsub('1%.6%.3','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.2','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.3','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -401,10 +401,19 @@ local function scenario(opts)
     assert(actions==0 and not checkpointState(),'Pairing changed quarry or turtle position')
     return
   end
+  if opts.unpairSaved then
+    files['quarry-data/state.a']=textutils.serialize({seq=4,startY=64,p=clone(p),route={},index=1,phase='paused',seen={},shape={w=width,l=length,h=depth}})
+  end
   if opts.companionMenu then
+    local savedBefore=files['quarry-data/state.a'];local configBefore=files['quarry-data/config']
     inputs=opts.companionMenu
     run('companion')
-    assert(actions==0 and not checkpointState(),'Companion setup moved the turtle or made a job')
+    assert(actions==0 and (opts.unpairSaved or not checkpointState()),'Companion setup moved the turtle or made a job')
+    if opts.networkUnpair then
+      assert(not files['quarry-data/companion'],'Unpair retained station credentials')
+      assert(files['quarry-data/state.a']==savedBefore and files['quarry-data/config']==configBefore,'Unpair changed job or mining settings')
+      return
+    end
     if opts.networkDisabled or opts.network then
       local p=textutils.unserialize(files['quarry-data/companion'])
       if opts.networkCheck then assert(p.enabled and table.concat(messages,'\n'):find('Connection checked. Station replied.',1,true),'Connection check did not confirm station')
@@ -756,6 +765,9 @@ check('Disabled wireless never probes hardware',{networkDisabled=true})
 check('Companion menu missing modem',{companionMenu={'1','q'}})
 check('Companion menu disables reporting',{network=true,companionMenu={'2'}})
 check('Companion connection check',{network=true,networkCheck=true,companionMenu={'3','q'}})
+check('Companion unpair removes credentials',{network=true,networkUnpair=true,companionMenu={'4'}})
+check('Companion unpair preserves saved quarry',{network=true,networkUnpair=true,unpairSaved=true,companionMenu={'4'}})
+check('Unpair without an existing pairing',{networkUnpair=true,companionMenu={'4'}})
 check('Guided companion pairing',{network=true,pairMenu=true})
 check('Pairing retries invalid ID and code',{network=true,pairMenu=true,pairInvalid=true})
 check('Station pairing command',{network=true,pairMenu=true,pairAlias=true})
