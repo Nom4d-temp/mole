@@ -108,12 +108,12 @@ During normal returns, position recovery, and emergency escape, Mole checks its 
 Mole works normally without a modem or companion. If you want to watch it from a computer and monitor, use the separate **Mole Companion** program, then enable the connection here:
 
 1. Equip the turtle with a **wireless or Ender modem**, keeping its pickaxe equipped.
-2. Start the companion on a nearby computer with a monitor and wireless/Ender modem. Press **P** on that computer to open pairing.
+2. Run `companion pair` on a nearby computer with a monitor and wireless/Ender modem. This opens guided pairing.
 3. On the turtle, run `mole companion` and choose **1**. Mole walks through the steps, checks its wireless modem, then asks for the clearly labelled station computer ID and six-digit pairing code. Missing hardware and invalid entries can be retried without restarting setup.
 4. Confirm the turtle on the companion computer and choose its name. Both screens confirm the connection. Mole remembers the pairing.
 5. Use `mole new` or `mole resume` as usual. No extra wireless questions appear during quarry setup.
 
-Pairing stays open for five minutes. On a first launch without paired turtles, the companion offers to pair your first turtle automatically. Until Mole runs, it shows **Paired - waiting for Mole to run** instead of implying a lost connection.
+Pairing stays open for five minutes. Use `companion pair` to connect turtles and `companion start` to open the status display. Plain `companion` shows its command overview. Until Mole runs, it shows **Paired - waiting for Mole to run** instead of implying a lost connection.
 
 You can also enter `mole pair <station ID> <code>` on the turtle as a shortcut to the same pairing flow. Choose **2** in `mole companion` to disable reporting, or **3** to check the modem and send a connection check to the paired station.
 
