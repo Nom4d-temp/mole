@@ -255,9 +255,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.4','9.0.0')
+    local source=program:gsub('1%.6%.5','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.4','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.5','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -586,10 +586,22 @@ local function scenario(opts)
       assert(removed==215,'Wrong pure-stone tunnel layout: '..removed)
     end
   end
-  if opts.network and not opts.networkReturn and not opts.networkSendThrow and not opts.networkReceiveThrow and not opts.networkDetach then
+  if opts.network and not opts.networkReturn and not opts.crashAfter and not opts.networkSendThrow and not opts.networkReceiveThrow and not opts.networkDetach then
     local found=false;for _,packet in ipairs(wirelessPackets) do if packet.kind=='discovery' and packet.block=='mod:ore' then found=true end end
     assert(found,'Unknown mined block was not reported')
+    local moving=false
+    for _,packet in ipairs(wirelessPackets) do
+      if packet.kind=='status' and packet.phase~='Recovering position' and packet.phase~='Emergency escape' and packet.phase~='Waiting for retrieval' then
+        assert(not packet.uncertain,'Normal movement reported lost position')
+        if packet.moving then moving=true end
+      end
+    end
+    assert(moving,'Heartbeat never exercised in-flight movement')
     if companionState then assert(companionState.turtles[4].status.phase=='Finished','Companion did not receive finished status') end
+  end
+  if opts.networkRecoveryReturn then
+    local recovering=false;for _,packet in ipairs(wirelessPackets) do if packet.kind=='status' and packet.phase=='Recovering position' and packet.uncertain then recovering=true end end
+    assert(recovering,'Real recovery was reported as certain')
   end
   if opts.networkRecoveryReturn then assert(injectedWireless and (not companionState or companionState.turtles[4].command.result=='rejected'),'Recovery accepted normal return request') end
   if opts.networkBadSender or opts.networkBadAction then assert(not s.companionReturn,'Invalid wireless command affected quarry state') end

@@ -1,6 +1,6 @@
--- Mole v1.6.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.4'
+local VERSION='1.6.5'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -202,8 +202,12 @@ end
 function net.status()
   if not net.active or not s or not s.startY then return end
   local names={work='Mining',home='Returning home',out='Returning to work',dock='At the chest',paused='Paused',done='Finished',recovery='Recovering position',emergency='Emergency escape',rescued='Waiting for retrieval'}
-  local uncertain=s.pending~=nil or s.recovery~=nil
+  -- A live journal entry is normal motion, not a lost pose. A pending
+  -- entry after restart/error still requires the existing recovery routine.
+  local moving=net.running and net.inFlight and not s.recovery
+  local uncertain=s.recovery~=nil or s.pending~=nil and not moving
   local p=s.p;local detail=s.service and s.service.reason or nil
+  if moving then detail=(detail and detail..'. ' or '')..'Moving; position is the last confirmed checkpoint.' end
   local y=s.startY-p.y
   if s.emergency then
     y=(s.emergency.targetY or s.startY)-s.emergency.p.y
@@ -211,7 +215,7 @@ function net.status()
     uncertain=true
   end
   net.send('status',{job=s.companionJob,phase=names[s.phase] or s.phase,y=y,depth=s.startY-y,
-    right=p.x,forward=p.z,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,detail=detail,
+    right=p.x,forward=p.z,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,moving=moving==true,detail=detail,
     progress='Tunnel positions completed: '..math.max(0,s.index-1)})
 end
 function net.flush()
@@ -263,7 +267,9 @@ function net.run(main)
   local nativePrint=print
   print=function(...) nativePrint(...);pcall(net.record,...) end
   local function mining()
+    net.running=true
     local result={main()}
+    net.running=false
     pcall(net.status);pcall(net.flush)
     return table.unpack(result)
   end
@@ -686,6 +692,7 @@ local function protectedBlock(b,per)
 end
 local function action(fn, after, route, probe)
   s.pending={before=copy(s.p),after=copy(after),route=route,probe=probe,fuel=turtle.getFuelLevel()}; save()
+  net.inFlight=true
   local ok,why=fn()
   if ok then
     s.p=copy(after); recordCell(s.p)
@@ -697,7 +704,7 @@ local function action(fn, after, route, probe)
       s.route={}; for i=1,s.service.at do s.route[i]=copy(s.service.path[i]) end
     end
   end
-  s.pending=nil; save(); return ok,why
+  s.pending=nil;net.inFlight=false; save(); return ok,why
 end
 local function face(d)
   while s.p.d~=d do
