@@ -175,9 +175,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.7','9.0.0')
+    local source=program:gsub('1%.4%.8','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.7','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.4%.8','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -382,6 +382,7 @@ local function scenario(opts)
   if opts.crash or opts.crashAfter or opts.turnCrash then
     if opts.returnDuringRecovery then
       run('return'); assert(checkpointState().phase=='paused' and p.y==0,'Return request not honored during recovery')
+      assert(table.concat(messages,'\n'):find('Returned home and paused as requested. Run mole to resume.',1,true),'Requested pause sounds like an error')
       run()
     else run() end
   end
@@ -397,7 +398,7 @@ local function scenario(opts)
   local s=(not b or a and a.seq>b.seq) and a or b
   if opts.chestCoal or opts.carriedCoal then
     local report=table.concat(messages,'\n')
-    assert(report:find('Fuel target: 100 units',1,true),'Missing fuel target')
+    assert(report:find('Target: 100.',1,true),'Missing fuel target')
     assert(report:find('Fuel after chest refueling: 160 fuel units',1,true),'Missing fuel after refueling')
     assert(report:find('Remaining fuel:',1,true) and report:find('No refueling needed.',1,true),'Missing final fuel report')
   end
@@ -438,6 +439,8 @@ local function scenario(opts)
       assert(warned==(depth>opts.startY+62),'Bedrock caution shown at wrong depth')
       local priorPrompts=prompts;run('status');assert(prompts==priorPrompts,'Status asked setup questions')
       assert(messages[#messages-1]:find('Y '..opts.startY,1,true),'Status missing world Y')
+      assert(messages[#messages-2]:find('Status: Finished',1,true),'Status uses internal state name')
+      assert(messages[#messages]:find('mole new',1,true),'Finished status missing next action')
     end
     if opts.stoneOnly and width==16 and length==16 and depth==6 then
       local removed=0; for _ in pairs(dug) do removed=removed+1 end

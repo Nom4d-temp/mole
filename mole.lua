@@ -1,6 +1,6 @@
--- Mole v1.4.7: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.8: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.7'
+local VERSION='1.4.8'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -126,6 +126,7 @@ local function same(a,b) return a.x==b.x and a.y==b.y and a.z==b.z end
 local function key(p) return p.x..','..p.y..','..p.z end
 local function fuel() local f=turtle.getFuelLevel(); return f=='unlimited' and math.huge or f end
 local function capacity() local f=turtle.getFuelLimit(); return f=='unlimited' and math.huge or f end
+local function fuelText() return fuel()==math.huge and 'unlimited' or tostring(fuel())..' fuel units' end
 local function depthText(p)
   return 'Y '..(s.startY-p.y)..' ('..p.y..' blocks below start)'
 end
@@ -282,7 +283,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.7 - first-time setup')
+  print('\nMole 1.4.8 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -335,21 +336,26 @@ if fresh then
   save(); ensureStartup()
   log('Starting '..c.length..' long x '..c.width..' wide, '..c.depth..' blocks deep.')
   log('Start: '..depthText(s.p)..'. Planned bottom: '..depthText({y=c.depth})..'.')
+  log('Job set up. Checking the chest and fuel before mining; no action needed.')
 elseif argv[1]=='init' then
   print('Already set up. Run mole to resume.'); return
 end
 c.width=s.shape.w; c.length=s.shape.l; c.depth=s.shape.h
 ensureStartup()
 if argv[1]=='status' then
+  local names={work='Mining',home='Returning to the chest',dock='At the starting chest',out='Returning to work',
+    recovery='Recovering position',emergency='Emergency escape',rescued='Waiting for retrieval',paused='Paused at the chest',done='Finished'}
+  log('Status: '..(s.pending and 'Recovering position on next launch' or names[s.phase] or s.phase))
   if s.emergency then
-    log('State: '..s.phase..'; emergency reason: '..s.emergency.reason)
-    log('Upward moves still required: '..s.emergency.p.y..'; fuel '..fuel())
-    if s.emergency.targetY then log('Emergency target: Y '..s.emergency.targetY) end
-    log('Emergency position is relative to the escape start; the mining job stays paused.'); return
+    log('Reason: '..s.emergency.reason)
+    log('Climb remaining: '..s.emergency.p.y..' blocks. Fuel: '..fuelText()..'.')
+    if s.emergency.targetY then log('Retrieval target: Y '..s.emergency.targetY) end
+    log(s.phase=='rescued' and 'Retrieve and reposition the turtle, then run mole reset.' or 'Run mole to continue emergency escape.');return
   end
-  log('Saved step '..s.index..'; fuel '..fuel())
-  log('State: '..s.phase..'; '..((s.pending or s.recovery) and 'saved estimate: ' or '')..depthText(s.p))
-  log('Local tunnel position '..key(s.p)..', facing '..s.p.d)
+  log((s.pending or s.recovery) and 'Position is being checked. Fuel: '..fuelText()..'.' or depthText(s.p)..'. Fuel: '..fuelText()..'.')
+  if s.phase=='done' then log('For a new job, reposition the turtle and chest, then run mole new.')
+  elseif s.phase=='paused' then log('Run mole to resume, or mole new to start a new job.')
+  else log('Run mole to '..((s.pending or s.recovery) and 'continue position recovery.' or 'resume the saved job.')) end
   return
 end
 local dx={0,1,0,-1}; local dz={1,0,-1,0}
@@ -625,7 +631,7 @@ local function homeStep()
       if reopened then return end
       if s.pending or not (obstruction(err) or failureCode(err)=='PROTECTED_BLOCK' or failureCode(err)=='DIG_BLOCKED') then error(err,0) end
       s.service.excavating=true; save()
-      log('No clear recorded route; excavating a detour toward home.')
+      log('Return tunnel blocked. Trying a digging detour home; no action needed yet.')
       excavateHome(); return
     end
     s.route=alternate; save()
@@ -692,14 +698,13 @@ local function unload()
       local item=turtle.getItemDetail(i)
       if item and ((pass==1 and c.fuel[item.name]) or (pass==2 and not c.fuel[item.name])) then
         turtle.select(i)
-        if turtle.getItemCount(i)>0 and not turtle.drop() then failure('CHEST_FULL','Output chest full; empty it and run mole.') end
-        if turtle.getItemCount(i)>0 then failure('CHEST_FULL','Output chest full; empty it and run mole.') end
+        if turtle.getItemCount(i)>0 and not turtle.drop() then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run mole.') end
+        if turtle.getItemCount(i)>0 then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run mole.') end
       end
     end
   end
   turtle.select(1)
 end
-local function fuelText() return fuel()==math.huge and 'unlimited' or tostring(fuel())..' fuel units' end
 local function chestFuel(target,minimum)
   chest(); local inv=peripheral.wrap('front')
   organizeFuel(inv)
@@ -739,14 +744,13 @@ local function chestFuel(target,minimum)
   unload()
   organizeFuel(inv)
   if problem then failure('CHEST_CHANGED',problem) end
-  if fuel()<minimum then failure('NEED_FUEL','Need more fuel for a safe departure: '..minimum..' units required. Refill the front fuel area and run mole.') end
-  if fuel()<target then log('Preferred fuel target not reached; safe minimum '..minimum..' is met, so mining can continue.') end
+  if fuel()<minimum then failure('NEED_FUEL','Waiting at the starting chest. Fuel: '..fuelText()..'; minimum needed: '..minimum..'. Add fuel to the reserved chest slots, starting at slot 1, then run mole.') end
+  if fuel()<target then log('Fuel is below the preferred target, but the safe minimum '..minimum..' is met. Resuming mining.') end
 end
 local function requestService(reason, pause)
-  local trail=#s.route
   local shortest=knownPath(origin,s.p)
   if shortest then s.route=shortest end
-  log('Returning to starting chest: '..reason..' ('..#s.route..' steps; trail was '..trail..'; '..depthText(s.p)..')')
+  log('Returning to starting chest: '..reason..' ('..#s.route..' steps; '..depthText(s.p)..'). No action needed yet.')
   s.service={path=copyPath(s.route),target=copy(s.p),at=0,pause=pause,reason=reason}
   s.phase='home'; save()
 end
@@ -764,11 +768,11 @@ local function service()
     unload()
     organizeFuel(peripheral.wrap('front'))
     if s.service.reason=='Quarry complete' then
-      s.phase='done'; save(); log('Complete; inventory unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); return false
+      s.phase='done'; save(); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run mole new.'); return false
     end
     if s.service.pause then
       s.phase='paused'; save(); log('Refueling deferred while paused. Fuel: '..fuelText()..'.')
-      log('Paused: '..s.service.reason..'. Fix it, then run mole.'); return false
+      log(s.service.reason=='User requested return' and 'Returned home and paused as requested. Run mole to resume.' or 'Paused at the starting chest: '..s.service.reason..'. Resolve the issue, then run mole.'); return false
     end
     local target=s.service.target or s.service.path[#s.service.path] or origin
     local shortest=knownPath(origin,target)
@@ -779,14 +783,11 @@ local function service()
     local needed=n+math.max(reserve(n),escapeNeeded>0 and escapeNeeded+c.emergencyFuelMargin+32 or 0)+64
     assert(needed<=capacity() or fuel()==math.huge,'Route exceeds fuel capacity; reduce depth or vein limits.')
     local fuelTarget=math.min(capacity(),math.max(c.fuelTarget,needed))
-    log('Fuel target: '..fuelTarget..' units, for '..n..' moves back to work, a safe return reserve, and more mining.')
-    if fuel()>=fuelTarget then
-      log('Fuel already meets the target; no additional fuel needed.')
-    else
-      log('Taking fuel from consecutive chest slots until the target is reached. Whole items may take fuel above the target.')
-    end
-    log('Minimum fuel for safe departure: '..needed..' units.')
+    log('Fuel: '..fuelText()..'. Target: '..fuelTarget..'. Minimum to resume safely: '..needed..'.')
+    log(fuel()>=fuelTarget and 'Fuel already meets the target; no additional fuel needed.'
+      or 'Refueling from the chest. Whole fuel items may exceed the target.')
     chestFuel(fuelTarget,needed)
+    log('Chest servicing complete. Returning to work automatically.')
     s.phase='out'; save()
   end
   if s.phase=='out' then
@@ -897,7 +898,7 @@ local function vein()
     end
     refuelTo(reserve(#s.route+1)+4)
     if freeSlots()<2 or fuel()<=reserve(#s.route+1)+3 then
-      requestService('Inventory or fuel reserve',false); return false
+      requestService(freeSlots()<2 and 'Inventory nearly full' or 'Fuel reserve reached',false); return false
     end
   end
   s.vein=nil; save(); return true
@@ -968,7 +969,7 @@ local function beginRecovery()
     resumePath=resumePath,resumeVein=resumeVein,
     reason=s.service and s.service.reason or 'Interrupted action recovery'}
   s.pending=nil; s.phase='recovery'; compactHypotheses(); save()
-  log('Uncertain action: homing to the starting chest without digging.')
+  log('Movement was interrupted. Checking my position by returning to the starting chest without digging. Leave the turtle and chest in place.')
 end
 local function settleRecoveryAction()
   local r=s.recovery; local pending=r.pending
@@ -1027,7 +1028,7 @@ local function homeRecovery()
   if fuel()<budget+c.fuelMargin then failure('RETURN_RECOVERY_FUEL','Insufficient fuel for chest recovery; saved hypotheses retained.') end
   while #r.hypotheses>0 do
     local h=r.hypotheses[1]; local reachable=true
-    log('Recovery trial: '..#h.route..' steps to the predicted origin.')
+    log('Checking a possible route to the starting chest: '..#h.route..' steps.')
     while #h.route>0 do
       local n=#h.route; local q=n==1 and {x=0,y=0,z=0} or h.route[n-1]
       assert(math.abs(q.x-h.p.x)+math.abs(q.y-h.p.y)+math.abs(q.z-h.p.z)==1,
@@ -1069,7 +1070,7 @@ local function homeRecovery()
         s.p={x=0,y=0,z=0,d=2}; s.route={}; s.vein=r.resumeVein
         s.service={path=r.resumePath or {},at=0,pause=r.pause,reason=r.reason}
         s.phase='dock'; s.recovery=nil; save()
-        log('Starting chest found. Resuming saved tunnel step '..s.index..'.')
+        log('Position confirmed at the starting chest. Preparing to resume mining.')
         return
       end
     end
@@ -1215,10 +1216,10 @@ local function emergencyAscent()
         end
       end
     end
-    if not moved then e.blocked[key(q)]=true;save();log('Emergency ascent blocked; trying a sideways detour.') end
+    if not moved then e.blocked[key(q)]=true;save();log('Emergency ascent blocked. Trying a sideways detour; no action needed yet.') end
   end
   s.phase='rescued';save()
-  log('Emergency ascent complete. Mining paused. Turtle needs to be returned to its starting chest.')
+  log('Emergency escape finished at the retrieval level. Mining remains stopped. Retrieve and reposition the turtle, then run mole reset.')
   if e.heightUncertainty>0 then log('Height was uncertain; the turtle may finish '..e.heightUncertainty..' block(s) above the target.') end
   log('Remaining fuel after emergency ascent: '..fuelText()..'.')
   log('This is a retrieval point, not confirmation of open sky. Use mole reset only after positioning the turtle for a new job.')
@@ -1246,7 +1247,8 @@ end
 if s.phase=='paused' then
   if argv[1]=='return' then print('Already paused at the starting chest.'); return end
   log('Paused: '..tostring(s.service and s.service.reason or 'User pause'))
-  if answer('Fixed the issue? Enter to resume, q to exit:'):lower()=='q' then return end
+  local prompt=s.service and s.service.reason=='User requested return' and 'Enter to resume mining, q to stay paused:' or 'After resolving the issue, Enter to resume, q to stay paused:'
+  if answer(prompt):lower()=='q' then return end
   s.service.pause=false; s.phase='dock'; save()
 end
 -- Resume first services the saved route, then resumes a saved vein or quarry cell.
@@ -1280,14 +1282,14 @@ local ok,err=pcall(function()
     end
     refuelTo(reserve(#s.route+1)+64)
     if fuel()<=math.max(reserve(#s.route+1)+32,ascentDistance(s.p.y)+c.emergencyFuelMargin+64) or freeSlots()<2 then
-      requestService('Inventory or fuel reserve',false)
+      requestService(freeSlots()<2 and 'Inventory nearly full' or 'Fuel reserve reached',false)
     else
       if not s.vein then
         local p=cell(s.index); gotoWork(p)
       end
       if vein() then
         s.index=s.index+1; save()
-        if s.index%16==0 then log('Tunnel progress: '..(s.index-1)..'/'..total..'; '..depthText(s.p)) end
+        if s.index%16==0 then log('Mining: tunnel positions completed '..(s.index-1)..'/'..total..'; '..depthText(s.p)) end
         if s.index<=total and plan[s.index].band~=plan[s.index-1].band then
           log('Tunnel level finished. Returning to the chest.')
           -- Reset to origin each band: shorter, predictable return paths.
