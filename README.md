@@ -105,15 +105,16 @@ During normal returns, chest recovery, and emergency escape, Mole checks its own
 
 If your modpack offers chunk-loading blocks or a tool such as **FTB Chunks**, we recommend using it to keep the whole mining area and starting chest loaded. Mole pauses when its chunk unloads and resumes its saved job when it loads again. Keeping the area loaded lets it work while you’re elsewhere, as long as the world or server is running.
 
-## Emergency ascent
+## Safety features
 
-If normal home-return routes, return excavation, or chest recovery fail, Mole can switch to a last-resort ascent. It first tries straight up, then tries sideways detours around protected or unbreakable ceilings. Detours stay within eight blocks along each horizontal axis from the emergency navigation anchor and never descend. This can leave the chosen quarry area, so keep it away from builds.
+- **Saved progress and recovery:** Mole saves its work as it goes and resumes after a restart or chunk reload. If a movement was interrupted, it tries to confirm its position at the starting chest before continuing. Keep the chest in place and avoid moving or turning the turtle during a job.
+- **Safer trips home:** Mole returns when inventory is full or fuel runs low. It uses known tunnels first, then tries to clear or dig around blocked return paths.
+- **Fuel reserves:** Mole adjusts its fuel needs for the journey back to work and keeps a return reserve. During returns and recovery, it can also use fuel carried in its inventory.
+- **Protected blocks and valuables:** Mole avoids configured protected blocks and detected machines. It keeps valuable items and normally drops trash only beneath its starting position.
+- **Depth guidance:** Entering the starting Y lets Mole suggest a depth ending at Y -62 and warn before deeper mining. You can override this for other dimensions.
+- **Emergency escape:** If returning home or finding the chest fails, Mole tries to climb to its starting elevation or your chosen emergency target, with sideways detours around obstacles. If a full inventory blocks escape, it may discard listed trash while keeping fuel and valuables. At the target, it stays paused for retrieval; use `mole status` to check its progress.
 
-The default destination is the starting elevation. If you entered a starting Y, you can choose a higher emergency target Y during setup. Reaching that height does **not** prove the turtle is above ground. If recovery leaves two possible heights, it uses the deeper estimate, so it may finish slightly above the target.
-
-Emergency movement is saved separately and resumes after a restart. Valuable items are kept. If a full inventory blocks emergency digging, Mole attempts to discard listed trash—even if ordinary trash dropping is off—until two slots are free. It tries below, then in front and above, and can attempt a drop against ordinary stone. Detected inventories, protected blocks, and unknown solid blocks are avoided. Fuel and non-trash items are kept. This is a last-resort exception to normal chest-only disposal. If dropping fails or no disposable trash remains, it saves progress and waits for help. Mole still respects protected blocks and detected machines. It stops with saved progress if fuel is insufficient, inventory cannot accept mined blocks, or no detour fits the available fuel and radius. It cannot escape every obstruction.
-
-After reaching the target, Mole stays paused for retrieval and never automatically resumes the old mining job. `mole status` shows the emergency reason and remaining climb. Retrieve the turtle, position it at a safe starting point, then use `mole reset` and `mole` to begin again; reset permanently clears the old job.
+Emergency escape cannot guarantee reaching the surface or getting past every obstacle. If fuel, space, or a safe route runs out, Mole saves its progress and waits for help.
 
 ## Refueling with lava buckets
 
