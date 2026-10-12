@@ -1,4 +1,4 @@
-# Mole 1.5.5
+# Mole 1.6.0
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -83,6 +83,7 @@ At the chest, Mole unloads its haul, drops trash underneath the starting positio
 | `mole resume` | Resume a saved job or recover interrupted movement |
 | `mole status` | Show saved progress, depth, and fuel |
 | `mole settings` | Change which blocks count as trash |
+| `mole companion` | Optional wireless setup, pairing, or disable reporting |
 | `mole return` | Return to the chest and pause |
 | `mole new` | Answer setup questions and start a new quarry |
 | `mole reset` | Clear saved jobs and recovery data, and restore all default settings |
@@ -101,6 +102,26 @@ When Mole replaces a supported startup file, it saves the original and restores 
 Do not pick up, move, or turn the turtle during a saved job. After a job is finished, you can move it to a new starting corner, put the chest behind it, and run `mole new`. If you paused an unfinished job to start a new one, that abandons the old job; its last state is saved as `quarry-data/previous-job` for reference.
 
 During normal returns, position recovery, and emergency escape, Mole checks its own inventory for allowed fuel before stopping on a fuel limit. It uses carried coal, charcoal, or lava buckets when available and reports the new fuel level. If no usable fuel remains and it cannot continue safely, it keeps the saved return or escape state for retry.
+
+## Optional Mole Companion
+
+Mole works normally without a modem or companion. If you want to watch it from a computer and monitor, use the separate **Mole Companion** program, then enable the connection here:
+
+1. Equip the turtle with a **wireless or Ender modem**, keeping its pickaxe equipped.
+2. Start the companion on a nearby computer with a monitor and wireless/Ender modem. Press **P** on that computer to open pairing.
+3. On the turtle, run `mole companion` and choose **1**. Mole checks for a wireless modem, then asks for the station computer ID and pairing code shown on the companion.
+4. Confirm the turtle on the companion computer and choose its name. Mole remembers the pairing.
+5. Use `mole new` or `mole resume` as usual. No extra wireless questions appear during quarry setup.
+
+The station can also show an exact `mole pair <station ID> <code>` command as a shortcut to the same pairing flow. Choose **2** in `mole companion` to disable reporting, or **3** to check the modem and pairing.
+
+When enabled, Mole reports tracked position, fuel, job state, recent messages, and unfamiliar blocks it successfully mines. Vanilla ores and configured trash are excluded from unfamiliar-block notices. Block IDs and counts appear on the companion; mining decisions stay the same.
+
+The companion's return button requests Mole's existing safe return-and-pause routine. Mole finishes the current action and bookkeeping before accepting it. Recovery and emergency escape take priority when a normal return is unavailable. Requests are acknowledged and repeated requests are handled without repeating the return.
+
+Wireless range, unloaded chunks, or a missing station can interrupt reporting. Mole keeps mining and using its normal safety checks. The station shows last-known data when contact is lost. Reporting runs while Mole is running; after finishing or pausing at the shell, its last report remains on the station. Ordinary wireless modems may lose contact deep underground; Ender modems avoid the distance limit. Neither loads chunks.
+
+Pairing settings are stored in `quarry-data/companion`. Updates and `mole new` preserve pairing. `mole reset` clears pairing and turns reporting off. This connection is intended for trusted worlds/servers; Rednet pairing does not protect against a malicious player.
 
 ## Keep Mole working while you’re away
 

@@ -4,8 +4,14 @@ local program=programFile:read('*a');programFile:close()
 local scenarioCount=0
 local originalPrint=print
 local originalClock=os.clock
+local networkOriginal={epoch=os.epoch,id=os.getComputerID,label=os.getComputerLabel,pull=os.pullEvent}
+local companionCore
+local companionSource=io.open('mole-companion/companion.lua')
+if companionSource then local src=companionSource:read('*a');companionSource:close();companionCore=assert(load(src))('--test') end
 local function scenario(opts)
   scenarioCount=scenarioCount+1
+  rednet=nil;parallel=nil
+  os.epoch=networkOriginal.epoch;os.getComputerID=networkOriginal.id;os.getComputerLabel=networkOriginal.label;os.pullEvent=networkOriginal.pull
   local mockTime=0
   os.clock=opts.slowProgress and function() mockTime=mockTime+21;return mockTime end or originalClock
   fs=nil;turtle=nil;peripheral=nil;textutils=nil;read=nil;write=nil;print=originalPrint;collectgarbage('collect')
@@ -88,7 +94,7 @@ local function scenario(opts)
     actions=actions+1
     local recoveryInterrupt=recoveryMoveCrash and checkpointState().phase=='recovery'
     if recoveryInterrupt and not opts.recoveryAfter then recoveryMoveCrash=false; error('unload before recovery movement') end
-    local interrupt=crash and not opts.turnCrash and (opts.detourCrash and checkpointState().service and checkpointState().service.excavating or not opts.detourCrash and actions>=(opts.at or 1))
+    local interrupt=crash and not opts.turnCrash and (opts.detourCrash and checkpointState().service and checkpointState().service.excavating or not opts.detourCrash and (opts.networkAcceptedCrash and checkpointState().companionReturn and checkpointState().companionReturn.result=='accepted' or not opts.networkAcceptedCrash and actions>=(opts.at or 1)))
     if interrupt and not opts.crashAfter then crash=false; error('simulated unload before movement') end
     local q=target(side); if world[key(q)] and world[key(q)]~='mod:oil' then return false end
     if f<=0 then return false end moves=moves+1; f=f-1; p.x=q.x;p.y=q.y;p.z=q.z; if recoveryInterrupt then recoveryMoveCrash=false; error('unload after recovery movement') end; if interrupt then crash=false; error('simulated unload after movement') end; return true
@@ -179,15 +185,70 @@ local function scenario(opts)
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
   if opts.oldFuelSchema then c.fuelSchemaVersion=nil;c.fuel['minecraft:lava_bucket']=nil;if opts.disableLava then c.fuel['minecraft:lava_bucket']=false end end
   if not opts.defaultConfig then files['quarry-data/config']=textutils.serialize(c) end
+  local wirelessPackets={};local wirelessClock=1000;local wirelessRequest;local injectedWireless=false
+  local companionState=companionCore and companionCore.new({{id=4,name='Test Mole',token='test-network-token'}})
+  if opts.network or opts.networkDisabled then
+    files['quarry-data/companion']=textutils.serialize({enabled=not (opts.networkDisabled or opts.pairMenu),station=7,token='test-network-token'})
+    local oldNames=peripheral.getNames;local oldType=peripheral.hasType;local oldWrap=peripheral.wrap;local oldPresent=peripheral.isPresent
+    peripheral.getNames=function() if opts.networkDisabled then error('Disabled feature probed modems') end;return opts.networkDetach and actions>=3 and {} or {'left'} end
+    peripheral.hasType=function(side,kind) return side=='left' and kind=='modem' or oldType(side,kind) end
+    peripheral.wrap=function(side) if side=='left' then return {isWireless=function() return true end} end;return oldWrap(side) end
+    peripheral.isPresent=function(side) if side=='left' then return not (opts.networkDetach and actions>=3) end;return oldPresent(side) end
+    os.epoch=function() return wirelessClock*1000 end;os.getComputerID=function() return 4 end
+    os.getComputerLabel=function() return 'Test Mole' end
+    os.pullEvent=function() coroutine.yield('idle') end
+    rednet={open=function(side) assert(side=='left') end,
+      send=function(id,msg,protocol)
+        if opts.pairMenu then assert(id==7 and msg.kind=='pair_hello' and msg.code=='123456' and msg.wireless==true);return true end
+        if opts.networkSendThrow then error('Disconnected modem') end
+        assert(id==7 and protocol=='mole-companion/1' and msg.token=='test-network-token','Incorrect pairing target')
+        if msg.kind=='status' then assert(msg.job and msg.y and msg.depth and msg.right and msg.forward,'Incomplete status') end
+        wirelessPackets[#wirelessPackets+1]=clone(msg)
+        if companionState then companionCore.receive(companionState,4,msg,wirelessClock) end
+        return true
+      end,
+      receive=function()
+        if opts.pairMenu then wirelessClock=wirelessClock+1;return opts.badPairSender and 99 or 7,{v=1,kind='paired',code='123456',station=7,token='new-pair-token'},'mole-companion/1' end
+        if opts.networkReceiveThrow then error('Listener failed') end
+        coroutine.yield('receive');wirelessClock=wirelessClock+0.2
+        if (opts.networkReturn or opts.networkRecoveryReturn or opts.networkEmergencyReturn or opts.networkBadSender or opts.networkBadAction) and not injectedWireless and actions>=3 and checkpointState().phase==(opts.networkRecoveryReturn and 'recovery' or opts.networkEmergencyReturn and 'emergency' or 'work') then
+          injectedWireless=true
+          if companionState then wirelessRequest=assert(companionCore.command(companionState,4,wirelessClock))
+          else
+            local status;for _,p in ipairs(wirelessPackets) do if p.kind=='status' then status=p end end
+            wirelessRequest={v=1,kind='command',action='return',request='return-once',token='test-network-token',session=status.session}
+          end
+          if opts.networkBadAction then wirelessRequest.action='reset' end
+          return opts.networkBadSender and 99 or 7,wirelessRequest,'mole-companion/1'
+        end
+        if opts.networkReturn and injectedWireless and checkpointState().companionReturn then return 7,wirelessRequest,'mole-companion/1' end
+      end}
+    parallel={waitForAny=function(main,listener)
+      local workers={coroutine.create(main),coroutine.create(listener)}
+      for cycle=1,20000 do
+        for _,worker in ipairs(workers) do
+          local ok,err=coroutine.resume(worker);if not ok then error(err,0) end
+          if coroutine.status(worker)=='dead' then return end
+        end
+      end
+      error('Wireless scheduler did not finish')
+    end}
+    if not opts.networkDisabled then for _,name in ipairs({'forward','up','down','turnLeft','turnRight'}) do
+      local actual=turtle[name]
+      turtle[name]=function(...) local result={actual(...)};coroutine.yield('physical action finished');return table.unpack(result) end
+    end
+    end
+    if opts.networkDisabled then parallel=nil end
+  end
   if opts.update then
     files['mole']=program
     files['quarry-data/state.a']=textutils.serialize({seq=4,phase='recovery',pending={}})
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.5%.5','9.0.0')
+    local source=program:gsub('1%.6%.0','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.5%.5','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.0','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -316,7 +377,29 @@ local function scenario(opts)
     end
     if emergencyCargo then for i=3,16 do assert(emergencyCargo[i] and emergencyCargo[i].name=='mod:ore','Lost valuables during trash disposal') end end
     if opts.injectEscapeFuel then assert(injected and consumed>0,'Emergency ascent did not use carried fuel') end
+    if opts.network and companionState then
+      assert(companionState.turtles[4].status.uncertain,'Emergency telemetry claimed confirmed quarry coordinates')
+      if opts.networkEmergencyReturn then assert(injectedWireless and companionState.turtles[4].command.result=='rejected','Emergency routine accepted normal return') end
+    end
     assert(world['2,6,0']=='minecraft:bedrock','Mined protected original return blockage')
+    return
+  end
+  if opts.pairMenu then
+    inputs={'1','7','123456'}
+    if opts.pairAlias then run('pair','7','123456') else run('companion') end
+    local paired=textutils.unserialize(files['quarry-data/companion'])
+    assert(paired.enabled==not opts.badPairSender,'Pairing did not validate reply sender')
+    assert(actions==0 and not checkpointState(),'Pairing changed quarry or turtle position')
+    return
+  end
+  if opts.companionMenu then
+    inputs=opts.companionMenu
+    run('companion')
+    assert(actions==0 and not checkpointState(),'Companion setup moved the turtle or made a job')
+    if opts.networkDisabled or opts.network then
+      local p=textutils.unserialize(files['quarry-data/companion'])
+      assert(not p.enabled,'Companion disable did not persist')
+    else assert(table.concat(messages,'\n'):find('No wireless/Ender modem found.',1,true),'Missing modem guidance absent') end
     return
   end
   if opts.commandFlow then
@@ -437,6 +520,15 @@ local function scenario(opts)
     assert(s.phase=='done' or s.phase=='paused','Did not reach home after excavating a return detour');assert(p.y==0,'Did not return to surface')
     assert(s.tunnels['1,1,0'] or s.tunnels['0,1,1'],'Did not bypass blocked shaft')
     assert(world['0,1,0']=='minecraft:bedrock','Destroyed the blocked route')
+  elseif opts.networkReturn then
+    if opts.networkAcceptedCrash then assert(not crash,'Accepted remote return interruption was not exercised') end
+    assert(s.phase=='paused' and p.y==0,'Remote return did not reach home and pause')
+    assert(s.companionReturn and s.companionReturn.result=='completed','Remote return completion not persisted')
+    assert(s.companionRequests[#s.companionRequests].result=='completed','Duplicate receipt did not persist completion')
+    if companionState then assert(companionState.turtles[4].command.result=='completed','Companion did not receive completion') end
+    local before=actions;inputs={'q'};run('resume')
+    assert(actions==before,'Completed return receipt restarted movement on resume')
+    local stored=checkpointState();assert(stored.companionReturn.result=='completed' and stored.companionRequests[#stored.companionRequests].result=='completed','Completed receipt lost after reloading serialized state')
   elseif opts.starve then assert(s.phase=='emergency'); assert(s.recovery)
   elseif opts.missing or opts.restoreChest then assert(s.phase=='rescued'); assert(s.recovery)
   elseif opts.protected then assert(s.phase=='paused'); assert(world['0,1,0']=='minecraft:chest')
@@ -475,6 +567,14 @@ local function scenario(opts)
       assert(removed==215,'Wrong pure-stone tunnel layout: '..removed)
     end
   end
+  if opts.network and not opts.networkReturn and not opts.networkSendThrow and not opts.networkReceiveThrow and not opts.networkDetach then
+    local found=false;for _,packet in ipairs(wirelessPackets) do if packet.kind=='discovery' and packet.block=='mod:ore' then found=true end end
+    assert(found,'Unknown mined block was not reported')
+    if companionState then assert(companionState.turtles[4].status.phase=='Finished','Companion did not receive finished status') end
+  end
+  if opts.networkRecoveryReturn then assert(injectedWireless and (not companionState or companionState.turtles[4].command.result=='rejected'),'Recovery accepted normal return request') end
+  if opts.networkBadSender or opts.networkBadAction then assert(not s.companionReturn,'Invalid wireless command affected quarry state') end
+  if opts.networkDisabled then assert(#wirelessPackets==0,'Disabled feature sent packets') end
   if opts.chestCoal or opts.carriedCoal then assert(consumed==2 and coal+chestCoal==(opts.chestCoal or 0)+(opts.carriedCoal or 0)-2,'Incorrect smart refueling') end
   if opts.forceLeftCrash then assert(not crash,'Left-turn interruption was never exercised') end
   assert(dimensionPrompts==setupPrompts,'Resume asked setup questions again')
@@ -494,6 +594,7 @@ end
 local function check(name,options)
   local ok,why=pcall(scenario,options)
   if not ok then error(name..': '..tostring(why),0) end
+  return why
 end
 local lava={name='minecraft:lava_bucket',count=1}
 local dirt={name='minecraft:dirt',count=1}
@@ -631,6 +732,27 @@ check('Installation and updates 28',{reset=true})
 check('Installation and updates 29',{reset=true,corruptReset=true})
 check('Installation and updates 30',{reset=true,existingStartup=true})
 check('Installation and updates 31',{reset=true,resetResume=true})
+
+-- Optional wireless integration, including live companion protocol validation when available.
+local standaloneMetrics=check('Standalone reference for wireless',{})
+local wirelessMetrics=check('Wireless telemetry and discoveries',{network=true})
+assert(standaloneMetrics.moves==wirelessMetrics.moves and standaloneMetrics.turns==wirelessMetrics.turns and standaloneMetrics.inspections==wirelessMetrics.inspections,'Optional reporting changed mining actions')
+check('Remote return and duplicate requests',{network=true,networkReturn=true})
+check('Accepted remote return survives interrupted movement',{network=true,networkReturn=true,networkAcceptedCrash=true,crashAfter=true})
+check('Wireless send failure keeps mining',{network=true,networkSendThrow=true})
+check('Wireless listener failure keeps mining',{network=true,networkReceiveThrow=true})
+check('Modem detach keeps mining',{network=true,networkDetach=true})
+check('Disabled wireless never probes hardware',{networkDisabled=true})
+check('Companion menu missing modem',{companionMenu={'1'}})
+check('Companion menu disables reporting',{network=true,companionMenu={'2'}})
+check('Guided companion pairing',{network=true,pairMenu=true})
+check('Station pairing command',{network=true,pairMenu=true,pairAlias=true})
+check('Wrong station pairing reply rejected',{network=true,pairMenu=true,badPairSender=true})
+check('Wireless emergency position reporting',{network=true,emergencyCase=true})
+check('Emergency rejects ordinary remote return',{network=true,emergencyCase=true,networkEmergencyReturn=true})
+check('Recovery rejects ordinary remote return',{network=true,crashAfter=true,at=45,networkRecoveryReturn=true})
+check('Wrong station commands ignored',{network=true,networkBadSender=true})
+check('Arbitrary wireless actions ignored',{network=true,networkBadAction=true})
 
 -- Every action offset remains covered, before/after movement and turning.
 for at=1,140 do

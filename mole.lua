@@ -1,8 +1,9 @@
--- Mole v1.5.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.0: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.5'
+local VERSION='1.6.0'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
+local print=print -- Keep optional output capture local to this program.
 local ROOT = 'quarry-data'
 fs.makeDir(ROOT)
 local function readFile(p)
@@ -149,6 +150,197 @@ local function numberQuestion(label,default,maximum)
     print('Enter a whole number from 1 to '..maximum..'.')
   end
 end
+-- Optional networking: disabled unless explicitly paired. Network callbacks
+-- only queue requests; the mining coroutine owns all turtle/checkpoint actions.
+local net={protocol='mole-companion/1',queue={},seq={},active=false}
+function net.clock() return os.epoch and os.epoch('utc')/1000 or os.time() end
+function net.clean(v,n) return type(v)=='string' and v:gsub('[%c]',' '):sub(1,n or 160) or nil end
+function net.validNumber(n) return type(n)=='number' and n==n and math.abs(n)~=math.huge and n%1==0 end
+function net.readProfile()
+  local ok,p=pcall(readFile,ROOT..'/companion')
+  if ok and type(p)=='table' and p.enabled==true and net.validNumber(p.station) and p.station>=0
+    and type(p.token)=='string' and #p.token>=8 and #p.token<=96 then return p end
+end
+function net.modem()
+  if not peripheral.getNames or not rednet or not rednet.open then return nil end
+  for _,name in ipairs(peripheral.getNames()) do
+    if peripheral.hasType(name,'modem') then
+      local p=peripheral.wrap(name);local ok,v=pcall(p.isWireless)
+      if ok and v then rednet.open(name);return name end
+    end
+  end
+end
+function net.setup()
+  net.profile=net.readProfile()
+  if not net.profile then return end
+  local ok,name=pcall(net.modem);if not ok or not name then return end
+  net.modemName=name;net.active=true
+  net.session=tostring(net.clock())..'-'..tostring(os.getComputerID())..'-'..math.random(100000,999999)
+end
+function net.packet(kind,body)
+  if not net.active then return end
+  net.seq[kind]=(net.seq[kind] or 0)+1
+  body.v=1;body.kind=kind;body.token=net.profile.token;body.session=net.session;body.seq=net.seq[kind]
+  return body
+end
+function net.send(kind,body)
+  local p=net.packet(kind,body);if not p then return false end
+  local ok,result=pcall(rednet.send,net.profile.station,p,net.protocol)
+  return ok and result
+end
+function net.enqueue(kind,body)
+  if not net.active then return end
+  net.queue[#net.queue+1]={kind,body}
+  if #net.queue>80 then table.remove(net.queue,1) end
+end
+function net.record(...)
+  if not net.active then return end
+  local parts={...};for i,v in ipairs(parts) do parts[i]=tostring(v) end
+  local line=table.concat(parts,' '):gsub('[%c]',' ')
+  repeat net.enqueue('log',{text=line:sub(1,256)});line=line:sub(257) until #line==0
+end
+function net.status()
+  if not net.active or not s or not s.startY then return end
+  local names={work='Mining',home='Returning home',out='Returning to work',dock='At the chest',paused='Paused',done='Finished',recovery='Recovering position',emergency='Emergency escape',rescued='Waiting for retrieval'}
+  local uncertain=s.pending~=nil or s.recovery~=nil
+  local p=s.p;local detail=s.service and s.service.reason or nil
+  local y=s.startY-p.y
+  if s.emergency then
+    y=(s.emergency.targetY or s.startY)-s.emergency.p.y
+    detail='Emergency climb: '..s.emergency.p.y..' blocks left. Horizontal quarry position is unknown.'
+    uncertain=true
+  end
+  net.send('status',{job=s.companionJob,phase=names[s.phase] or s.phase,y=y,depth=s.startY-y,
+    right=p.x,forward=p.z,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,detail=detail,
+    progress='Tunnel positions completed: '..math.max(0,s.index-1)})
+end
+function net.flush()
+  local queue=net.queue;net.queue={}
+  for _,item in ipairs(queue) do net.send(item[1],item[2]) end
+end
+function net.receipt(id,result,detail)
+  net.enqueue('ack',{request=id,result=result,detail=detail})
+end
+function net.handle(sender,msg,protocol)
+  if not net.active or protocol~=net.protocol or sender~=net.profile.station or type(msg)~='table'
+    or msg.v~=1 or msg.token~=net.profile.token or msg.kind~='command' or msg.action~='return'
+    or type(msg.request)~='string' or #msg.request<1 or #msg.request>96 then return end
+  for _,r in ipairs(s.companionRequests or {}) do
+    if r.id==msg.request then net.receipt(r.id,r.result,r.detail);return end
+  end
+  local sent=tonumber(msg.request:match('^(%d+%.?%d*)%-'))
+  if sent and net.clock()-sent>30 then net.receipt(msg.request,'rejected','Return request expired. Refresh status and try again.');return end
+  if msg.session~=net.session then net.receipt(msg.request,'rejected','Turtle restarted. Refresh status and request return again.');return end
+  if s.phase=='paused' and s.p.x==0 and s.p.y==0 and s.p.z==0 then net.receipt(msg.request,'completed','Already home and paused.');return end
+  if s.phase=='recovery' or s.phase=='emergency' or s.phase=='rescued' or s.phase=='done' then
+    net.receipt(msg.request,'rejected','Current state: '..s.phase..'. Check turtle status.');return
+  end
+  if net.pending and net.pending.id~=msg.request or s.companionReturn and s.companionReturn.result=='accepted' then
+    net.receipt(msg.request,'rejected','Another return is already in progress.');return
+  end
+  net.pending={id=msg.request,received=net.clock()}
+end
+function net.discovery(block)
+  if not net.profile or not net.profile.enabled or not s or c.trash[block.name] then return end
+  local known=block.name:match('^minecraft:.*_ore$') or block.name=='minecraft:ancient_debris'
+  if known then return end
+  s.companionBlocks=s.companionBlocks or {}
+  local old=s.companionBlocks[block.name]
+  if not old then local n=0;for _ in pairs(s.companionBlocks) do n=n+1 end;if n>=128 then return end end
+  local item={count=(old and old.count or 0)+1,name=net.clean(block.displayName,64)}
+  s.companionBlocks[block.name]=item
+  net.enqueue('discovery',{job=s.companionJob,block=block.name,name=item.name,count=item.count})
+  if not old then log('Mining unfamiliar block: '..block.name) end
+end
+function net.replay()
+  if not net.active or not s then return end
+  for id,b in pairs(s.companionBlocks or {}) do net.send('discovery',{job=s.companionJob,block=id,name=b.name,count=b.count}) end
+end
+function net.run(main)
+  if not net.profile then return main() end
+  if not net.active then print('Companion offline; mining continues.') end
+  if not s.companionJob then s.companionJob='quarry-'..tostring(net.clock())..'-'..s.seq..'-'..math.random(100000,999999) end
+  local nativePrint=print
+  print=function(...) nativePrint(...);pcall(net.record,...) end
+  local function mining()
+    local result={main()}
+    pcall(net.status);pcall(net.flush)
+    return table.unpack(result)
+  end
+  if not parallel or not parallel.waitForAny or not os.pullEvent or not rednet then return mining() end
+  local function listener()
+    local ok,why=pcall(function()
+      local nextStatus=0;local replayAt=0
+      while true do
+        if net.modemName and not peripheral.isPresent(net.modemName) then net.active=false end
+        if not net.active then local found,name=pcall(net.modem);if found and name then net.active=true;net.modemName=name;net.session=net.session or tostring(net.clock())..'-'..os.getComputerID();nextStatus=0 end end
+        if net.active then
+          if net.clock()>=nextStatus then net.status();nextStatus=net.clock()+5 end
+          if net.clock()>=replayAt then
+            if replayAt==0 and s.companionReturn then net.receipt(s.companionReturn.id,s.companionReturn.result,s.companionReturn.detail) end
+            net.replay();replayAt=net.clock()+15
+          end
+          net.flush()
+        end
+        local id,msg,protocol=rednet.receive(net.protocol,1)
+        if id then net.handle(id,msg,protocol) end
+      end
+    end)
+    if not ok and tostring(why)=='Terminated' then error(why,0) end
+    net.active=false
+    pcall(nativePrint,'[Mole] Companion link stopped. Mining continues.')
+    -- A failed listener must not finish waitForAny and cancel the miner.
+    while true do os.pullEvent() end
+  end
+  return parallel.waitForAny(mining,listener)
+end
+function net.menu(station,code)
+  while true do
+    print('Mole companion (optional)')
+    print(net.readProfile() and 'Reporting: enabled and paired' or 'Reporting: off')
+    print('1 Pair / enable a companion')
+    print('2 Disable wireless reporting')
+    print('3 Check modem and pairing')
+    print('Enter or q: finish')
+    local choice=station and '1' or answer('Choose:'):lower()
+    if choice=='' or choice=='q' then return end
+    if choice=='2' then
+      local p=net.readProfile() or {};p.enabled=false;writeFile(ROOT..'/companion',p);net.active=false;net.profile=nil
+      print('Wireless reporting disabled.');return
+    elseif choice=='3' then
+      local ok,name=pcall(net.modem)
+      print(ok and name and 'Wireless modem found: '..name or 'No wireless/Ender modem equipped.')
+      local p=net.readProfile();if p then print('Paired station: '..p.station) end
+    elseif choice=='1' then
+      print('Keep this turtle near the station.')
+      print('Equip a wireless or Ender modem.');print('Keep the pickaxe equipped too.')
+      local ok,name=pcall(net.modem)
+      if not ok or not name then print('No wireless/Ender modem found.');print('Equip it, then try mole companion.');return end
+      print('On the companion computer, press P.')
+      local id=tonumber(station or answer('Station computer ID (q cancels):'))
+      if not net.validNumber(id) or id<0 then print('Pairing cancelled. Use a whole ID.');return end
+      local pin=tostring(code or answer('Pairing code (q cancels):'))
+      if not pin:match('^%d%d%d%d%d%d$') then print('Pairing cancelled. Use six digits.');return end
+      local hello={v=1,kind='pair_hello',code=pin,wireless=true,name=os.getComputerLabel and os.getComputerLabel() or 'Mole '..os.getComputerID()}
+      local sent=pcall(rednet.send,id,hello,net.protocol)
+      if not sent then print('Could not send. Pairing kept off.');return end
+      print('Confirm this turtle on the station.');print('Waiting up to 90 seconds...')
+      local deadline=net.clock()+90;local nextHello=net.clock()+5
+      while net.clock()<deadline do
+        local received,msg=rednet.receive(net.protocol,1)
+        if received==id and type(msg)=='table' and msg.v==1 and msg.kind=='paired' and msg.code==pin and msg.station==id
+          and type(msg.token)=='string' and #msg.token>=8 and #msg.token<=96 then
+          writeFile(ROOT..'/companion',{enabled=true,station=id,token=msg.token})
+          print('Paired. Wireless reporting enabled.');print('Use mole new or mole resume to mine.');return
+        end
+        if net.clock()>=nextHello then pcall(rednet.send,id,hello,net.protocol);nextHello=net.clock()+5 end
+      end
+      print('No pairing reply. Keep both nearby.');print('Check chunks, modems, and code.');print('Previous pairing kept, if present.');return
+    else print('Choose 1, 2, 3, or Enter.') end
+  end
+end
+pcall(net.setup)
+
 local function ensureStartup()
   local program=shell.getRunningProgram()
   if s and s.program~=program then s.program=program; save() end
@@ -267,7 +459,7 @@ local function settingsMenu()
 end
 local function usage(full)
   print('Mole '..VERSION..' - tunnel miner')
-  if s then
+  if s and not full then
     local names={work='Mining',home='Returning home',out='Returning to work',dock='At the chest',paused='Paused',done='Finished',recovery='Recovering position',emergency='Emergency escape',rescued='Waiting for retrieval'}
     print('Saved job: '..(names[s.phase] or s.phase)..'.')
   end
@@ -280,6 +472,7 @@ local function usage(full)
     print('mole update    Get latest version')
     print('mole reset     Clear job/settings')
     print('mole delete    Uninstall Mole')
+    print('mole companion Wireless setup')
   else print('mole help    All commands') end
   print(full and 'Ctrl+T: stop' or 'Ctrl+T: stop; mole resume: continue')
 
@@ -291,6 +484,11 @@ if not argv[1] then
   usage();return
 end
 if argv[1]=='help' then usage(true);return end
+if argv[1]=='companion' or argv[1]=='pair' then
+  local ok,why=pcall(net.menu,argv[1]=='pair' and argv[2] or nil,argv[3])
+  if not ok then print('Wireless setup stopped. Mining unchanged.');print('Check modems and try mole companion.') end
+  return
+end
 local commands={new=true,resume=true,status=true,['return']=true,settings=true,config=true}
 if not commands[argv[1]] then print('Unknown command: '..argv[1]);usage();return end
 if argv[1]=='settings' or argv[1]=='config' then settingsMenu(); return end
@@ -508,6 +706,7 @@ local function guardedDig(side)
   end
   if freeSlots()<2 then failure('INVENTORY_FULL','Inventory reserve reached') end
   local ok,why=dig(); if not ok then failure('DIG_BLOCKED','Cannot dig '..b.name..': '..tostring(why)) end
+  pcall(net.discovery,b)
   return true
 end
 local function step(target, mode, clearedOnly)
@@ -662,16 +861,16 @@ local function gotoWork(p)
     while not same(s.p,p) do
       local path=knownPath(s.p,p)
       if not path then failure('NO_ROUTE','No clear known route to the saved work position.') end
-      for _,q in ipairs(path) do if not knownStep(q,'push') then break end end
+      for _,q in ipairs(path) do if not knownStep(q,'push') then break end;net.raiseReturn() end
     end
     return
   end
   -- New shaft and tunnel cells are excavated only inside the work footprint.
   while s.p.y~=p.y do
-    step({x=s.p.x,y=s.p.y+(p.y>s.p.y and 1 or -1),z=s.p.z},'push')
+    step({x=s.p.x,y=s.p.y+(p.y>s.p.y and 1 or -1),z=s.p.z},'push');net.raiseReturn()
   end
-  while s.p.x~=p.x do step({x=s.p.x+(p.x>s.p.x and 1 or -1),y=s.p.y,z=s.p.z},'push') end
-  while s.p.z~=p.z do step({x=s.p.x,y=s.p.y,z=s.p.z+(p.z>s.p.z and 1 or -1)},'push') end
+  while s.p.x~=p.x do step({x=s.p.x+(p.x>s.p.x and 1 or -1),y=s.p.y,z=s.p.z},'push');net.raiseReturn() end
+  while s.p.z~=p.z do step({x=s.p.x,y=s.p.y,z=s.p.z+(p.z>s.p.z and 1 or -1)},'push');net.raiseReturn() end
 end
 local function chest()
   face(2)
@@ -774,9 +973,31 @@ local function requestService(reason, pause)
   s.service={path=copyPath(s.route),target=copy(s.p),at=0,pause=pause,reason=reason}
   s.phase='home'; save()
 end
+function net.raiseReturn()
+  if net.pending and not s.pending and not s.recovery and s.phase~='emergency' then
+    if net.clock()-net.pending.received>30 then net.receipt(net.pending.id,'rejected','Request expired before a safe checkpoint.');net.pending=nil;return end
+    failure('REMOTE_RETURN','Companion requested return')
+  end
+end
+function net.acceptReturn()
+  local pending=net.pending;net.pending=nil;if not pending then return end
+  local r={id=pending.id,result='accepted'}
+  s.companionRequests=s.companionRequests or {}
+  s.companionRequests[#s.companionRequests+1]=r
+  if #s.companionRequests>16 then table.remove(s.companionRequests,1) end
+  s.companionReturn=r
+  if s.phase=='work' or s.phase=='out' then
+    local destination=s.phase=='out' and copyPath(s.service.path) or nil
+    requestService('User requested return',true)
+    if destination then s.service.path=destination;s.service.target=copy(destination[#destination] or origin);save() end
+  elseif s.service then
+    s.service.pause=true;s.service.reason='User requested return';save()
+  else r.result='rejected';r.detail='Cannot return in this state.';save() end
+  net.receipt(r.id,r.result,r.detail)
+end
 local function service()
   if s.phase=='home' then
-    while #s.route>0 do homeStep() end
+    while #s.route>0 do homeStep();net.raiseReturn() end
     if s.service.reset then s.service.path={}; s.service.target=copy(origin) end
     s.phase='dock'; save()
   end
@@ -791,6 +1012,11 @@ local function service()
       s.phase='done'; save(); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run mole new.'); return false
     end
     if s.service.pause then
+      if s.companionReturn and s.companionReturn.result=='accepted' then
+        s.companionReturn.result='completed'
+        for _,r in ipairs(s.companionRequests or {}) do if r.id==s.companionReturn.id then r.result='completed' end end
+        net.receipt(s.companionReturn.id,'completed','Home and paused.')
+      end
       s.phase='paused'; save(); log('Refueling deferred while paused. Fuel: '..fuelText()..'.')
       log(s.service.reason=='User requested return' and 'Returned home and paused as requested. Run mole resume to resume.' or 'Paused at the starting chest: '..s.service.reason..'. Resolve the issue, then run mole resume.'); return false
     end
@@ -826,6 +1052,7 @@ local function service()
       end
       -- Route is the completed outbound prefix, reconstructed after each checkpoint.
       s.route={}; for i=1,s.service.at do s.route[i]=copy(s.service.path[i]) end; save()
+      net.raiseReturn()
     end
     s.phase='work'; s.service=nil; save()
   end
@@ -904,6 +1131,7 @@ end
 local function vein()
   if not s.vein then s.vein={stack={scanFrame(s.p)},count=0}; save() end
   while #s.vein.stack>0 do
+    net.raiseReturn()
     local v=s.vein; local f=v.stack[#v.stack]
     local parent=v.stack[#v.stack-1]
     local returning=f.next>=6 or v.count>=c.veinLimit or #v.stack>c.veinDepth
@@ -1207,7 +1435,9 @@ local function emergencyDig(side,inspect,per)
   local occupied,block=inspect()
   if protectedBlock(occupied and block or nil,per) then return false end
   if not occupied or passable[block.name] then return true end
-  return (side=='up' and turtle.digUp or turtle.dig)()
+  local dug=(side=='up' and turtle.digUp or turtle.dig)()
+  if dug then pcall(net.discovery,block) end
+  return dug
 end
 local function emergencyAscent()
   settleEmergency()
@@ -1278,6 +1508,7 @@ local function attemptEmergency(why)
   local ok,err=pcall(function() if s.phase~='emergency' then startEmergency(tostring(why)) end;emergencyAscent() end)
   if not ok then log('Emergency escape saved: '..tostring(err)..'. Run mole resume to retry.') end
 end
+local function miningMain()
 if s.phase=='rescued' then
   log('Emergency ascent already completed. Mining stays paused; retrieve the turtle and use mole reset at a safe starting point.');return
 end
@@ -1309,7 +1540,7 @@ local ok,err=pcall(function()
   if s.upgradeBand~=nil then
     if s.phase~='dock' then
       requestService('Updating to tunnel mining',false); s.service.reset=true; save()
-      while #s.route>0 do homeStep() end
+      while #s.route>0 do homeStep();net.raiseReturn() end
       s.phase='dock'; save()
     end
     upgradeAtDock()
@@ -1318,6 +1549,7 @@ local ok,err=pcall(function()
     requestService('Initial chest/fuel check',false)
   end
   while true do
+    net.raiseReturn()
     if s.phase~='work' then if not service() then return end end
     if s.index>total then
       requestService('Quarry complete',true); s.service.reason='Quarry complete'; save()
@@ -1342,6 +1574,10 @@ local ok,err=pcall(function()
     end
   end
 end)
+if not ok and failureCode(err)=='REMOTE_RETURN' then
+  net.acceptReturn()
+  ok,err=pcall(service)
+end
 if not ok then
   log(tostring(err))
   if s.pending or s.recovery then
@@ -1359,3 +1595,6 @@ if not ok then
   elseif fallbackReason(err) then attemptEmergency(err)
   else stoppedAdvice(err) end
 end
+
+end
+net.run(miningMain)
