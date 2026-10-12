@@ -1,6 +1,6 @@
--- Mole v1.6.7: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.8: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.7'
+local VERSION='1.6.8'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -207,6 +207,7 @@ function net.status()
   -- entry after restart/error still requires the existing recovery routine.
   local moving=net.running and net.inFlight and not s.recovery
   local uncertain=s.recovery~=nil or s.pending~=nil and not moving
+  local used=0;for slot=1,16 do if turtle.getItemCount(slot)>0 then used=used+1 end end
   local p=s.p;local detail=s.service and s.service.reason or nil
   local y=s.startY-p.y
   if s.emergency then
@@ -215,7 +216,7 @@ function net.status()
     uncertain=true
   end
   net.send('status',{job=s.companionJob,phase=names[s.phase] or s.phase,y=y,depth=s.startY-y,
-    right=p.x,forward=p.z,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,moving=moving==true,detail=detail,
+    right=p.x,forward=p.z,inventory=used,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,moving=moving==true,detail=detail,
     progress='Tunnels: '..math.max(0,s.index-1)..(net.total and '/'..net.total or '')})
 end
 function net.flush()
@@ -246,6 +247,13 @@ function net.handle(sender,msg,protocol)
 end
 function net.isOre(id) return id:match('^minecraft:.*_ore$') or id=='minecraft:ancient_debris' end
 function net.blocks(n) return n..' block'..(n==1 and '' or 's') end
+function net.mining(block)
+  if not net.active or c.trash[block.name] or net.isOre(block.name) or net.lastBlock==block.name then return end
+  net.lastBlock=block.name
+  log('Mining unfamiliar block:')
+  log(block.name)
+  net.flush()
+end
 function net.discovery(block)
   if not net.profile or not net.profile.enabled or not s or c.trash[block.name] then return end
   local known=net.isOre(block.name)
@@ -256,7 +264,6 @@ function net.discovery(block)
   local item={count=(old and old.count or 0)+1,name=net.clean(block.displayName,64)}
   s.companionBlocks[block.name]=item
   net.enqueue('discovery',{job=s.companionJob,block=block.name,name=item.name,count=item.count})
-  if not old then log('Mining unfamiliar block: '..block.name) end
 end
 function net.replay()
   if not net.active or not s then return end
@@ -775,6 +782,7 @@ local function guardedDig(side)
     failure('PROTECTED_BLOCK','Protected block: '..b.name)
   end
   if freeSlots()<2 then failure('INVENTORY_FULL','Inventory reserve reached') end
+  pcall(net.mining,b)
   local ok,why=dig(); if not ok then failure('DIG_BLOCKED','Cannot dig '..b.name..': '..tostring(why)) end
   pcall(net.discovery,b)
   return true
@@ -1527,6 +1535,7 @@ local function emergencyDig(side,inspect,per)
   local occupied,block=inspect()
   if protectedBlock(occupied and block or nil,per) then return false end
   if not occupied or passable[block.name] then return true end
+  pcall(net.mining,block)
   local dug=(side=='up' and turtle.digUp or turtle.dig)()
   if dug then pcall(net.discovery,block) end
   return dug
