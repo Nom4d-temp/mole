@@ -1,6 +1,6 @@
--- Mole v1.6.10: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.11: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.10'
+local VERSION='1.6.11'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -311,10 +311,14 @@ function net.run(main)
 end
 function net.checkConnection(profile)
   local nonce=tostring(net.clock())..'-'..math.random(100000,999999)
-  local ok,sent=pcall(rednet.send,profile.station,{v=1,kind='ping',token=profile.token,nonce=nonce},net.protocol)
-  if not ok or not sent then return false end
   local deadline=net.clock()+10
+  local retry=0
   while net.clock()<deadline do
+    if net.clock()>=retry then
+      local ok,sent=pcall(rednet.send,profile.station,{v=1,kind='ping',token=profile.token,nonce=nonce},net.protocol)
+      if not ok or not sent then return false end
+      retry=net.clock()+3
+    end
     local id,msg=rednet.receive(net.protocol,1)
     if id==profile.station and type(msg)=='table' and msg.v==1 and msg.kind=='pong' and msg.token==profile.token and msg.nonce==nonce then return true end
   end
@@ -347,8 +351,9 @@ function net.menu(station,code)
       if not ok or not name then print('No wireless/Ender modem found.')
       elseif not current then print('Modem found. Choose 1 to pair.')
       else
+        print("On station, run 'companion start'.")
         print('Checking station ID '..current.station..'...')
-        print(net.checkConnection(current) and 'Connection checked. Station replied.' or 'No station reply. Check range/chunks.')
+        print(net.checkConnection(current) and 'Connection checked. Station replied.' or 'No reply. Check station, range/chunks.')
       end
     elseif choice=='1' then
       print('Step 1/4: check turtle equipment')

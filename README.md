@@ -1,4 +1,4 @@
-# Mole 1.6.10
+# Mole 1.6.11
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 

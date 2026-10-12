@@ -192,6 +192,7 @@ local function scenario(opts)
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
   if opts.oldFuelSchema then c.fuelSchemaVersion=nil;c.fuel['minecraft:lava_bucket']=nil;if opts.disableLava then c.fuel['minecraft:lava_bucket']=false end end
   if not opts.defaultConfig then files['quarry-data/config']=textutils.serialize(c) end
+  local pingAttempts=0
   local pingNonce
   local wirelessPackets={};local wirelessClock=1000;local wirelessRequest;local injectedWireless=false
   local companionState=companionCore and companionCore.new({{id=4,name='Test Mole',token='test-network-token'}})
@@ -207,7 +208,7 @@ local function scenario(opts)
     os.pullEvent=function() coroutine.yield('idle') end
     rednet={open=function(side) assert(side=='left') end,
       send=function(id,msg,protocol)
-        if opts.networkCheck then assert(msg.kind=='ping');pingNonce=msg.nonce;return true end
+        if opts.networkCheck then assert(msg.kind=='ping');pingAttempts=pingAttempts+1;pingNonce=msg.nonce;return true end
         if opts.pairMenu then assert(id==7 and (msg.kind=='pair_hello' and msg.code=='123456' and msg.wireless==true or msg.kind=='pair_ready' and msg.token=='new-pair-token'));return true end
         if opts.networkSendThrow then error('Disconnected modem') end
         assert(id==7 and protocol=='mole-companion/1' and msg.token=='test-network-token','Incorrect pairing target')
@@ -217,7 +218,7 @@ local function scenario(opts)
         return true
       end,
       receive=function()
-        if opts.networkCheck then wirelessClock=wirelessClock+1;return 7,{v=1,kind='pong',token='test-network-token',nonce=pingNonce},'mole-companion/1' end
+        if opts.networkCheck then wirelessClock=wirelessClock+1;if opts.lostPing and pingAttempts<2 then return nil end;return 7,{v=1,kind='pong',token='test-network-token',nonce=pingNonce},'mole-companion/1' end
         if opts.pairMenu then wirelessClock=wirelessClock+1;local saved=textutils.unserialize(files['quarry-data/companion']);return opts.badPairSender and 99 or 7,{v=1,kind=saved.enabled and 'pair_verified' or 'paired',code='123456',station=7,token='new-pair-token'},'mole-companion/1' end
         if opts.networkReceiveThrow then error('Listener failed') end
         coroutine.yield('receive');wirelessClock=wirelessClock+0.2
@@ -256,9 +257,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.10','9.0.0')
+    local source=program:gsub('1%.6%.11','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.10','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.11','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -788,6 +789,7 @@ check('Disabled wireless never probes hardware',{networkDisabled=true})
 check('Companion menu missing modem',{companionMenu={'1','q'}})
 check('Companion menu disables reporting',{network=true,companionMenu={'4'}})
 check('Companion connection check',{network=true,networkCheck=true,companionMenu={'3','q'}})
+check('Companion connection check retries lost ping',{network=true,networkCheck=true,lostPing=true,companionMenu={'3','q'}})
 check('Companion unpair removes credentials',{network=true,networkUnpair=true,companionMenu={'2'}})
 check('Companion unpair preserves saved quarry',{network=true,networkUnpair=true,unpairSaved=true,companionMenu={'2'}})
 check('Unpair without an existing pairing',{networkUnpair=true,companionMenu={'2'}})
