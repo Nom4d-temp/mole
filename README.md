@@ -4,7 +4,7 @@
 
 **Meet Mole: your turtle’s next mining adventure.** Mole turns a CC: Tweaked mining turtle into a tunnel miner that searches for nearby ores while leaving ordinary stone in place wherever possible. Answer a few setup questions, give it a chest and some fuel, and let it get to work.
 
-Mole follows connected ore veins, brings its haul back to your chest, and manages refueling and trash disposal. Saved progress and automatic recovery help it pick up after interruptions, while simple commands let you change settings, start a new quarry, or update straight from GitHub. It works with normal and advanced mining turtles, with unfamiliar modded blocks kept by default.
+Mole follows connected ore veins, brings its haul back to your chest, and manages refueling and trash disposal. Saved progress and automatic recovery help it pick up after interruptions, while simple commands let you change settings, start a new quarry, or update straight from GitHub.
 
 ## What you need
 
