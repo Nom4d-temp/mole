@@ -1,6 +1,6 @@
--- Mole v1.5.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.5.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.4'
+local VERSION='1.5.5'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -236,7 +236,7 @@ if argv[1]=='update' then
       return
     end
     print('Updated Mole to '..version..'. Previous program saved as '..backup..'.')
-    print('Job, settings, and startup backup kept. Run '..program..' resume to resume.')
+    print('Job, settings, and startup backup kept.')
   end
   local ok,why=pcall(update)
   if not ok then print('Update stopped: '..tostring(why)..'. Check the program and its .update-backup before restarting.') end
