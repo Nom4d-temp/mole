@@ -156,16 +156,6 @@ Keep the turtle's mining area and chest loaded. The program cannot load chunks i
 
 Your job, settings, fuel, inventory, and original startup backup are kept. The previous program is saved as `mole.update-backup`. A failed download leaves the current program in place. If installation fails, Mole tries to restore the previous program. Mole's automatic startup also restores that backup if an interrupted installation leaves the program missing. Custom startup scripts are left alone.
 
-If you need to restore the backup manually, remove the faulty `mole` file, then run `move mole.update-backup mole`. This restores the program only; it does not roll back your job or settings. Syntax checks cannot guarantee a new release is free of bugs. Do not downgrade to a version without emergency-ascent support while an emergency/rescued save exists; retrieve and reset the turtle with the current version first.
-
-**Installing this updater for the first time:** versions before 1.3.7 need one manual update. Stop Mole, rename the old file with `move mole mole-backup` (choose another backup name if needed), then download:
-
-```text
-wget https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua mole
-```
-
-Run `mole` once. Future updates can use `mole update`. Updates become available when the newer `mole.lua` is uploaded to the repository's `main` branch.
-
 ## Config file
 
 Mole stores its settings in `quarry-data/config` on the turtle. Most users can use the setup questions and `mole settings`. For advanced changes, stop Mole with Ctrl+T, then type `edit quarry-data/config`.
