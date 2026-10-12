@@ -175,9 +175,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.6','9.0.0')
+    local source=program:gsub('1%.4%.7','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.6','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.4%.7','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -300,10 +300,7 @@ local function scenario(opts)
       turtle.drop=turtle.dropDown;turtle.dropUp=turtle.dropDown
     end
     run()
-    if opts.escapeInterrupt or opts.escapeTurnInterrupt then
-      local before=actions;run();assert(actions==before,'Moved after interrupted emergency action')
-      assert(table.concat(messages,'\n'):find('position is uncertain',1,true),'Missing interrupted-move instructions');return
-    end
+    if opts.escapeInterrupt or opts.escapeTurnInterrupt then run() end
     local state=checkpointState()
     if opts.escapeRoof or opts.escapeDropFails or opts.escapeAllValuable or opts.escapeFuel and opts.escapeFuel<6 then
       assert(state.phase=='emergency' and state.emergency,'Emergency failure did not remain resumable')
@@ -355,11 +352,6 @@ local function scenario(opts)
   if opts.legacy or opts.activeLegacyFrame then
     assert(actions==0 and prompts==0,'Unsupported save moved or asked for Y')
     assert(table.concat(messages,'\n'):find('no valid starting Y',1,true),'Missing unsupported-save instructions');return
-  end
-  if checkpointState() and checkpointState().pending then
-    local before=actions;local prior=prompts;run()
-    assert(actions==before and prompts==prior,'Interrupted move resumed or asked questions')
-    assert(table.concat(messages,'\n'):find('position is uncertain',1,true),'Missing interrupted-move instructions');return
   end
   if opts.falseFuelError then
     assert(not checkpointState().emergency and checkpointState().pending,'Message text caused a false emergency')
@@ -514,7 +506,7 @@ for at=1,140 do
   scenario({crash=true,at=at}); scenario({crashAfter=true,at=at});
   scenario({turnCrash=true,at=at}); scenario({turnCrash=true,crashAfter=true,at=at});
 end
-print('PASS: '..scenarioCount..' scenarios, guided setup, input validation/cancel, resume without prompts, startup preservation, unsupported Y saves rejected, tunnel trash retained, exposed veins, hidden ores left, bounds, interrupted movement stops, fuel and chest failures')
+print('PASS: '..scenarioCount..' scenarios, guided setup, input validation/cancel, resume without prompts, startup preservation, unsupported Y saves rejected, tunnel trash retained, exposed veins, hidden ores left, bounds, automatic interrupted-move recovery, fuel and chest failures')
 
 -- Optional comparison against a prior source file, outside the deliverable.
 local baseline=os.getenv('MOLE_BASELINE')
