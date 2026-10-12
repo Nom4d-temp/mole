@@ -1,6 +1,6 @@
--- Mole v1.3.11: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.3.12: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.3.11'
+local VERSION='1.3.12'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -16,7 +16,7 @@ end
 local defaults = {
   width=16, length=16, depth=64, fuelMargin=64, fuelTarget=2560,
   retries=12, veinLimit=128, veinDepth=24, discardTrash=true,
-  fuel={['minecraft:coal']=true, ['minecraft:charcoal']=true},
+  fuelSchemaVersion=2, fuel={['minecraft:coal']=true, ['minecraft:charcoal']=true, ['minecraft:lava_bucket']=true},
   trash={['minecraft:dirt']=true, ['minecraft:grass_block']=true,
     ['minecraft:cobblestone']=true, ['minecraft:stone']=true,
     ['minecraft:gravel']=true, ['minecraft:andesite']=true,
@@ -96,6 +96,10 @@ if not fs.exists(CP) then writeFile(CP, defaults) end
 local c=readFile(CP)
 -- Upgrade the former default while preserving deliberately different targets.
 if c.fuelTarget==2000 then c.fuelTarget=2560; writeFile(CP,c) end
+if c.fuelSchemaVersion==nil and type(c.fuel)=='table' then
+  if c.fuel['minecraft:lava_bucket']==nil then c.fuel['minecraft:lava_bucket']=true end
+  c.fuelSchemaVersion=2; writeFile(CP,c)
+end
 for _,k in ipairs({'width','length','depth','fuelMargin','fuelTarget','retries','veinLimit','veinDepth'}) do
   assert(type(c[k])=='number' and c[k]>=1 and c[k]%1==0, 'Invalid config: '..k)
 end
@@ -265,7 +269,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.3.11 - first-time setup')
+  print('\nMole 1.3.12 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for each default, or q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -303,7 +307,7 @@ if fresh then
     end
   end
   print('\nPlace a chest directly BEHIND this turtle.')
-  print('Put coal/charcoal in the first chest slots.')
+  print('Put coal, charcoal, or lava buckets in consecutive chest slots, starting at slot 1.')
   print('Face the turtle into the mining area.')
   print('Check that the area is safe to dig.')
   while true do
@@ -639,22 +643,42 @@ end
 local function fuelText() return fuel()==math.huge and 'unlimited' or tostring(fuel())..' fuel units' end
 local function chestFuel(target)
   chest(); local inv=peripheral.wrap('front')
-  -- Native suck cannot choose chest slots. Scan a fixed initial stack count,
-  -- retaining nonfuel until the scan ends so returned items cannot loop forever.
-  local count=0; for _ in pairs(inv.list()) do count=count+1 end
   refuelTo(target)
-  for _=1,count do
+  local sequence={}; local contents=inv.list()
+  for i=1,inv.size() do
+    local item=contents[i]
+    if not item or not c.fuel[item.name] then break end
+    sequence[#sequence+1]={slot=i,name=item.name,count=item.count}
+  end
+  local problem
+  for _,entry in ipairs(sequence) do
     if fuel()>=target then break end
+    local listed=inv.list()
+    for i=1,entry.slot-1 do
+      if listed[i] then problem='Chest fuel order changed while refueling; check the first slots and retry.'; break end
+    end
+    if problem then break end
+    local live=listed[entry.slot]
+    if not live or live.name~=entry.name or live.count~=entry.count then
+      problem='Chest fuel changed while refueling; check the first slots and retry.'; break
+    end
     local slot
     for i=1,16 do if turtle.getItemCount(i)==0 then slot=i; break end end
-    if not slot then break end
+    if not slot then problem='No space for more fuel or empty buckets; rearrange the chest fuel and retry.'; break end
     turtle.select(slot)
-    if not turtle.suck() then break end
-    refuelTo(target)
+    if not turtle.suck(math.min(entry.count,64)) then problem='Could not take the next fuel item; check the chest and retry.'; break end
+    local taken=turtle.getItemDetail(slot)
+    if not taken or taken.name~=entry.name or turtle.getItemCount(slot)~=math.min(entry.count,64) then
+      problem='Chest extraction did not match the fuel sequence; items will be returned. Check the chest and retry.'; break
+    end
+    local before=fuel(); refuelTo(target)
+    if fuel()==before then problem='This configured fuel cannot refuel the turtle; check the fuel list.'; break end
+    -- Keep empty buckets and unused fuel onboard until the sequence finishes.
   end
   log('Fuel after chest refueling: '..fuelText()..' (target: '..target..').')
   unload()
-  if fuel()<target then error('Need more coal/charcoal. Put it at the front of the chest inventory, then run mole.',0) end
+  if problem then error(problem,0) end
+  if fuel()<target then error('Need more fuel. Put coal, charcoal, or lava buckets in consecutive chest slots starting at slot 1. The first empty or non-fuel slot ends refueling; then run mole.',0) end
 end
 local function requestService(reason, pause)
   local trail=#s.route
@@ -692,9 +716,9 @@ local function service()
     local fuelTarget=math.min(capacity(),math.max(c.fuelTarget,needed))
     log('Fuel target: '..fuelTarget..' units, for '..n..' moves back to work, a safe return/recovery reserve, and more mining.')
     if fuel()>=fuelTarget then
-      log('Fuel already meets the target; no coal or charcoal needed.')
+      log('Fuel already meets the target; no additional fuel needed.')
     else
-      log('Taking coal/charcoal from the chest until the target is reached. Whole items may take fuel above the target.')
+      log('Taking fuel from consecutive chest slots until the target is reached. Whole items may take fuel above the target.')
     end
     chestFuel(fuelTarget)
     s.phase='out'; save()

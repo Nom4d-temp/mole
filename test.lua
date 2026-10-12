@@ -30,7 +30,7 @@ local function scenario(opts)
     files[to]=files[from];files[from]=nil
     if opts.updateUnload and to=='mole.update-backup' then error('simulated unload during installation') end
   end,delete=function(path) for k in pairs(files) do if k==path or k:sub(1,#path+1)==path..'/' then files[k]=nil end end end,exists=function(p) return files[p]~=nil end,
-    open=function(p,m) return {readAll=function() return files[p] end,write=function(v) if opts.updateWriteFail and p=='mole.update-download' then error('simulated disk full') end;files[p]=v end,close=function() end} end}
+    open=function(p,m) return {readAll=function() return files[p] end,write=function(v) if opts.fuelChest and objects[v] and objects[v].phase=='out' then error('fuel fixture stop after docking') end;if opts.updateWriteFail and p=='mole.update-download' then error('simulated disk full') end;files[p]=v end,close=function() end} end}
   local p={x=0,y=0,z=0,d=0}; local world={}; local dug={}; local amount=0; local f=opts.fuel or 10000; local coal=opts.carriedCoal or 0;local chestCoal=opts.chestCoal or 0;local coalSlot=2;local selected=1;local consumed=0; local crash=opts.crash or opts.crashAfter or opts.turnCrash; local actions=0; local turns=0; local leftTurns=0; local inspections=0; local moves=0; local detailQueries=0; local countQueries=0; local injected=false; local recoveryCrash=opts.recoveryCrash; local recoveryMoveCrash=opts.recoveryMoveCrash
   local dx={0,1,0,-1}; local dz={1,0,-1,0}
   for x=0,width-1 do for z=0,length-1 do for y=1,depth do world[x..','..y..','..z]='minecraft:stone' end end end
@@ -111,11 +111,49 @@ local function scenario(opts)
   peripheral={isPresent=function(side) return isChest(side) end,hasType=function(side,t) return isChest(side) end,
     getType=function() return 'minecraft:chest' end,
     wrap=function() return {size=function() return 27 end,list=function() if chestCoal>0 then return {[1]={name='minecraft:coal',count=chestCoal}} end;return {} end} end}
+  local fuelConsumed,bucketsReturned,pulls=0,0,0
+  local chestSlots
+  if opts.fuelChest then
+    chestSlots=clone(opts.fuelChest);local cargo={}
+    turtle.getItemDetail=function(i) return cargo[i] and {name=cargo[i].name,count=cargo[i].count} end
+    turtle.getItemCount=function(i) return cargo[i] and cargo[i].count or 0 end
+    turtle.suck=function(count)
+      for i=1,27 do if chestSlots[i] then
+        local item=chestSlots[i];local n=math.min(count or 64,item.count)
+        cargo[selected]={name=item.name,count=n};item.count=item.count-n
+        if item.count==0 then chestSlots[i]=nil end
+        pulls=pulls+1
+        if opts.changedFuel and pulls==1 then chestSlots[1]={name='minecraft:dirt',count=1} end
+        return true
+      end end
+      return false
+    end
+    turtle.refuel=function()
+      local item=cargo[selected]
+      if not item or (item.name~='minecraft:coal' and item.name~='minecraft:charcoal' and item.name~='minecraft:lava_bucket') then return false end
+      local lava=item.name=='minecraft:lava_bucket'
+      f=f+(lava and 1000 or 80);fuelConsumed=fuelConsumed+1
+      if lava then cargo[selected]={name='minecraft:bucket',count=1}
+      else item.count=item.count-1;if item.count==0 then cargo[selected]=nil end end
+      return true
+    end
+    turtle.drop=function()
+      local item=cargo[selected];if not item then return true end
+      if item.name=='minecraft:bucket' then
+        bucketsReturned=bucketsReturned+item.count
+        if opts.bucketExpected then assert(f>=opts.expectedFuel,'Returned empty bucket before fuel target reached') end
+      end
+      for i=1,27 do if not chestSlots[i] then chestSlots[i]=clone(item);cargo[selected]=nil;return true end end
+      return false
+    end
+    peripheral.wrap=function() return {size=function() return 27 end,list=function() return clone(chestSlots) end} end
+  end
   sleep=function() end
   local function run(...) return assert(load(program,'mole'))(...) end
-  local c={width=width,length=length,depth=depth,fuelTarget=opts.oldFuelDefault and 2000 or 100,fuelMargin=10,retries=12,veinLimit=128,veinDepth=24,
-    discardTrash=not opts.keepTrash,fuel={['minecraft:coal']=true,['minecraft:charcoal']=true},
+  local c={width=width,length=length,depth=depth,fuelTarget=opts.fuelChest and (opts.fuelGoal or 2560) or opts.oldFuelDefault and 2000 or 100,fuelMargin=10,retries=12,veinLimit=128,veinDepth=24,
+    fuelSchemaVersion=2,discardTrash=not opts.keepTrash,fuel={['minecraft:coal']=true,['minecraft:charcoal']=true,['minecraft:lava_bucket']=true},
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
+  if opts.oldFuelSchema then c.fuelSchemaVersion=nil;c.fuel['minecraft:lava_bucket']=nil;if opts.disableLava then c.fuel['minecraft:lava_bucket']=false end end
   if not opts.defaultConfig then files['quarry-data/config']=textutils.serialize(c) end
   if opts.update then
     files['mole']=program
@@ -123,9 +161,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.3%.11','9.0.0')
+    local source=program:gsub('1%.3%.12','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.3%.11','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.3%.12','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -197,6 +235,14 @@ local function scenario(opts)
     files['quarry-data/state.a']=textutils.serialize(old)
   end
   if opts.deleteCorrupt then files['quarry-data/config']='damaged config' else run() end
+  if opts.fuelChest then
+    assert(f==opts.expectedFuel,'Wrong fuel amount from chest sequence: '..f)
+    assert(pulls==opts.expectedPulls,'Scanned beyond fuel sequence or pulled too much')
+    assert(bucketsReturned==(opts.expectedBuckets or 0),'Lost empty buckets')
+    assert(p.y==0,'Fuel test moved away from chest')
+    if opts.remainingBucket then assert(chestSlots[opts.remainingBucket] and chestSlots[opts.remainingBucket].name=='minecraft:lava_bucket','Consumed unneeded lava bucket') end
+    return
+  end
   if opts.delete then
     files['mole']='program contents'
     if opts.changedStartup then files['startup.lua']='separately edited startup' end
@@ -219,6 +265,10 @@ local function scenario(opts)
   if opts.restoreBridge then world['0,1,0']=nil;run() end
   if opts.cancel then
     assert(not checkpointState(),'Cancelled setup created a job'); assert(actions==0,'Moved during cancelled setup');return
+  end
+  if opts.oldFuelSchema then
+    local upgraded=textutils.unserialize(files['quarry-data/config'])
+    assert(upgraded.fuelSchemaVersion==2 and upgraded.fuel['minecraft:lava_bucket']==not opts.disableLava,'Fuel schema migration failed')
   end
   if opts.oldFuelDefault then assert(textutils.unserialize(files['quarry-data/config']).fuelTarget==2560,'Old fuel default not upgraded') end
   local setupPrompts=dimensionPrompts
@@ -333,7 +383,14 @@ scenario({activeLegacyFrame=true,crashAfter=true});
 scenario({turnCrash=true,forceLeftCrash=true});
 scenario({turnCrash=true,forceLeftCrash=true,crashAfter=true});
 scenario({blockShortcut=true});
-scenario({oldFuelDefault=true});scenario({startY=-56});scenario({startY=-59,expectedDepth=3});scenario({startY=-59,heightOverride='yes'});scenario({startY=-62,heightOverride='yes'});scenario({startY=-63,heightOverride='yes'});scenario({inputs={'3','3','bad','-56','6','',''}});scenario({startY=-62,cancel=true});scenario({update=true});scenario({update=true,existingStartup=true});scenario({update=true,updateSame=true});scenario({update=true,updateOlder=true});scenario({update=true,updateBad=true});scenario({update=true,updateSyntax=true});scenario({update=true,updateOffline=true});scenario({update=true,updateDisabled=true});scenario({update=true,updateMoveFail=true});scenario({update=true,updateWriteFail=true});scenario({update=true,updateUnload=true});scenario({delete=true});scenario({delete=true,deleteAnswer='no'});scenario({delete=true,deleteAnswer=''});scenario({delete=true,existingStartup=true});scenario({delete=true,legacyStartup=true});scenario({delete=true,legacyGuard=true});scenario({delete=true,changedStartup=true});scenario({delete=true,resetBeforeDelete=true});scenario({delete=true,deleteCorrupt=true});scenario({delete=true,oldInstall=true});scenario({reset=true});scenario({reset=true,corruptReset=true});scenario({reset=true,existingStartup=true});scenario({reset=true,resetResume=true});scenario({fluid=true});scenario({fluid=true,crash=true,at=3});scenario({fluid=true,crashAfter=true,at=3});scenario({fluid=true,turnCrash=true,at=3});scenario({trashCargo=true});scenario({trashCargo=true,trashBlocked=true});scenario({trashCargo=true,trashDropFail=true});scenario({trashCargo=true,keepTrash=true});scenario({blockBridge=true});scenario({blockBridge=true,width=1,length=1});scenario({blockBridge=true,detourCrash=true,crash=true});scenario({blockBridge=true,detourCrash=true,crashAfter=true});scenario({blockBridge=true,breakableBridge=true});scenario({blockBridge=true,restoreBridge=true});
+local lava={name='minecraft:lava_bucket',count=1};local dirt={name='minecraft:dirt',count=1}
+scenario({fuel=0,fuelChest={lava,lava,lava,lava},expectedFuel=3000,expectedPulls=3,expectedBuckets=3,remainingBucket=4,bucketExpected=true});
+scenario({fuel=0,fuelChest={[1]=lava,[3]=lava},expectedFuel=1000,expectedPulls=1,expectedBuckets=1});
+scenario({fuel=0,fuelChest={lava,dirt,lava},expectedFuel=1000,expectedPulls=1,expectedBuckets=1});
+scenario({fuel=0,fuelChest={[2]=lava},expectedFuel=0,expectedPulls=0});
+scenario({fuel=0,fuelChest={{name='minecraft:coal',count=10},lava,lava},expectedFuel=2800,expectedPulls=3,expectedBuckets=2,bucketExpected=true});
+scenario({fuel=3000,fuelChest={lava},expectedFuel=3000,expectedPulls=0,remainingBucket=1});
+scenario({fuel=0,fuelChest={lava,lava,lava},changedFuel=true,expectedFuel=1000,expectedPulls=1,expectedBuckets=1});scenario({oldFuelSchema=true});scenario({oldFuelSchema=true,disableLava=true});scenario({oldFuelDefault=true});scenario({startY=-56});scenario({startY=-59,expectedDepth=3});scenario({startY=-59,heightOverride='yes'});scenario({startY=-62,heightOverride='yes'});scenario({startY=-63,heightOverride='yes'});scenario({inputs={'3','3','bad','-56','6','',''}});scenario({startY=-62,cancel=true});scenario({update=true});scenario({update=true,existingStartup=true});scenario({update=true,updateSame=true});scenario({update=true,updateOlder=true});scenario({update=true,updateBad=true});scenario({update=true,updateSyntax=true});scenario({update=true,updateOffline=true});scenario({update=true,updateDisabled=true});scenario({update=true,updateMoveFail=true});scenario({update=true,updateWriteFail=true});scenario({update=true,updateUnload=true});scenario({delete=true});scenario({delete=true,deleteAnswer='no'});scenario({delete=true,deleteAnswer=''});scenario({delete=true,existingStartup=true});scenario({delete=true,legacyStartup=true});scenario({delete=true,legacyGuard=true});scenario({delete=true,changedStartup=true});scenario({delete=true,resetBeforeDelete=true});scenario({delete=true,deleteCorrupt=true});scenario({delete=true,oldInstall=true});scenario({reset=true});scenario({reset=true,corruptReset=true});scenario({reset=true,existingStartup=true});scenario({reset=true,resetResume=true});scenario({fluid=true});scenario({fluid=true,crash=true,at=3});scenario({fluid=true,crashAfter=true,at=3});scenario({fluid=true,turnCrash=true,at=3});scenario({trashCargo=true});scenario({trashCargo=true,trashBlocked=true});scenario({trashCargo=true,trashDropFail=true});scenario({trashCargo=true,keepTrash=true});scenario({blockBridge=true});scenario({blockBridge=true,width=1,length=1});scenario({blockBridge=true,detourCrash=true,crash=true});scenario({blockBridge=true,detourCrash=true,crashAfter=true});scenario({blockBridge=true,breakableBridge=true});scenario({blockBridge=true,restoreBridge=true});
 scenario({outboundObstacle=true});
 scenario({fuel=0,chestCoal=64});scenario({fuel=0,carriedCoal=64});
 scenario({outboundObstacle=true,crashAfter=true,at=3});

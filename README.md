@@ -1,4 +1,4 @@
-# Mole 1.3.11
+# Mole 1.3.12
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -10,7 +10,7 @@ Mole follows connected ore veins, brings its haul back to your chest, and manage
 
 - Minecraft with **CC: Tweaked**.
 - A **mining turtle** with a diamond pickaxe upgrade. A normal or advanced mining turtle works.
-- A chest and some coal or charcoal. Put one stack in the chest to start.
+- A chest and coal, charcoal, or lava buckets. One stack of coal or charcoal is a good starting supply.
 - Internet downloads enabled for turtles. If your server blocks them, ask its owner.
 
 ## 1. Download the program onto your turtle
@@ -28,7 +28,7 @@ This downloads Mole and saves it on your turtle as **mole**.
 1. Choose an area you are happy for the turtle to mine underneath.
 2. Put the turtle at the **near-left corner**, facing into the area.
 3. Put the chest **directly behind the turtle**, at the same height.
-4. Put a stack of coal or charcoal in the **first slot of the chest**. Leave room for the items it brings back.
+4. Put fuel in **consecutive chest slots starting at slot 1**. Coal, charcoal, and lava buckets can be mixed. The first empty slot or non-fuel item ends the fuel sequence. Leave room for the items it brings back.
 
 **Length goes forward. Width goes to the turtle's right. Depth goes down from its starting block.** The column directly below the turtle is included in the mining area.
 
@@ -73,9 +73,17 @@ At every tunnel step it checks the blocks above, below, in front, behind, left, 
 
 **Mole uses tunnel mining.** Stone stays in the walls, ceiling, and floor. Some isolated ores hidden between tunnels can be missed because the turtle cannot see through stone. Connected veins it finds are followed inside the chosen area. A search has size and depth limits so huge modded deposits cannot make the turtle wander forever; some of a very large deposit may remain.
 
-At the starting chest, Mole reports its current fuel, the target for the next trip, why that target is needed, and its fuel after refueling. The default target is **2,560 fuel units**, equal to 32 coal or charcoal from empty. Existing settings using the former 2,000 target are upgraded to 2,560; other custom targets are kept. Longer routes can require a higher target. It uses coal or charcoal only when below the target. Whole fuel items can take it slightly above the target. When the job finishes, it reports remaining fuel and does not refuel.
+At the starting chest, Mole reports its current fuel, the target for the next trip, why that target is needed, and its fuel after refueling. The default target is **2,560 fuel units**, equal to 32 coal or charcoal from empty. Existing settings using the former 2,000 target are upgraded to 2,560; other custom targets are kept. Longer routes can require a higher target. It uses coal, charcoal, or lava buckets only when below the target. Whole fuel items can take it slightly above the target. When the job finishes, it reports remaining fuel and does not refuel.
 
 The turtle returns to the chest when its inventory is nearly full, it needs fuel, or a tunnel level is finished. It also comes home when it finishes the whole job. It chooses the shortest route through cells it has already visited, and uses known tunnels to get back to work. If a passage becomes blocked, it tries another known route. If none is clear, it tries to mine the obstruction, then digs a detour toward the starting position. It reconnects to known tunnels as soon as it can. Emergency detours can extend one block past the far edges of the chosen width and length, and can reach the surface. Keep that border clear of builds. Protected blocks and machines are still left alone. If every approach is blocked, fuel is insufficient, or inventory space runs out, it saves progress and reports the problem after attempting to return.
+
+## Refueling with lava buckets
+
+Lava buckets are accepted alongside coal and charcoal. Mole reads the fuel sequence from chest slot 1 onward and stops at the first empty or non-fuel slot. It consumes only enough fuel to reach its target; it does not automatically use every bucket it finds.
+
+Empty buckets stay in the turtle until that refueling pass finishes, then are returned to the chest with unused fuel. Before the next refueling visit, remove returned empty buckets from the front slots and refill any gaps: an empty bucket counts as a non-fuel item. If chest contents change during refueling, Mole stops and reports the problem. It needs spare chest space to return buckets and unload its haul.
+
+Existing configurations gain lava-bucket support once; an explicitly disabled lava-bucket entry is preserved. You can edit allowed fuels in the config file. Mole does not collect lava from the world or refill buckets itself.
 
 ## Everyday controls
 
@@ -115,13 +123,13 @@ The starter list contains dirt, stone, cobblestone, gravel, granite, and similar
 
 Choose **4** to turn trash dropping on or off. Turning it off keeps tunnel rubble and unloads it into the chest. When dropping is on, the turtle carries trash home and drops it into the empty space below its starting position before unloading valuable items into the chest. It never drops trash while mining. If the space underneath is blocked or a drop fails, it waits at home for you to clear it, keeping the trash out of the chest. Leave this space open. Dropped items are normal world items, so they may be picked up again.
 
-An ore's block ID and the item it drops can be different. The block ID controls whether the turtle follows it; the item ID controls whether a collected item is discarded. Add both IDs only if you want both ignored/discarded. Coal and charcoal are kept for fuel even if added to trash.
+An ore's block ID and the item it drops can be different. The block ID controls whether the turtle follows it; the item ID controls whether a collected item is discarded. Add both IDs only if you want both ignored/discarded. Allowed fuel items, including coal, charcoal, and lava buckets, are kept even if added to trash.
 
 ## If it stops
 
 | Message or problem | What to do |
 | --- | --- |
-| Not enough fuel | Add coal/charcoal to the chest's first slots, then run `mole` again. |
+| Not enough fuel | Refill consecutive fuel slots from slot 1 with coal, charcoal, or lava buckets, then run `mole` again. |
 | Chest full | Empty the chest, then run `mole` again. |
 | No chest behind you during setup | Place it directly behind the turtle at the same height, then press Enter to retry. |
 | Protected or unbreakable block | Check what it reported. It tries to return home and pauses. Run `mole` after fixing the cause and follow the resume prompt. |
@@ -160,3 +168,4 @@ The file contains the trash list, allowed fuel items, protected blocks, fuel tar
 ## AI disclosure
 
 Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
+
