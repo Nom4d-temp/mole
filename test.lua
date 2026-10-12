@@ -119,6 +119,7 @@ local function scenario(opts)
     getType=function() return 'minecraft:chest' end,
     wrap=function() return {size=function() return 27 end,list=function() if chestCoal>0 then return {[1]={name='minecraft:coal',count=chestCoal}} end;return {} end} end}
   local fuelConsumed,bucketsReturned,pulls=0,0,0
+  local chestListCalls=0
   local chestSlots
   if opts.fuelChest then
     chestSlots=clone(opts.fuelChest);local cargo={}
@@ -153,7 +154,7 @@ local function scenario(opts)
       for i=1,27 do if not chestSlots[i] then chestSlots[i]=clone(item);cargo[selected]=nil;return true end end
       return false
     end
-    peripheral.wrap=function() return {size=function() return 27 end,list=function() return clone(chestSlots) end,
+    peripheral.wrap=function() return {size=function() return 27 end,list=function() chestListCalls=chestListCalls+1;return clone(chestSlots) end,
       pushItems=function(name,from,count,to)
         assert(name=='front' and from~=to,'Invalid self inventory transfer')
         local item=chestSlots[from];if not item or chestSlots[to] then return 0 end
@@ -174,9 +175,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.3','9.0.0')
+    local source=program:gsub('1%.4%.4','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.3','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.4%.4','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -324,7 +325,7 @@ local function scenario(opts)
       f=1500;opts.expectedFuel=2500;run();assert(f==2500 and fuelConsumed==4,'Could not use remaining lava bucket automatically on second visit')
       assert(table.concat(messages,'\n'):find('safe minimum',1,true),'No below-target departure report')
     end
-    return
+    return {chestListCalls=chestListCalls,fuel=f,pulls=pulls,buckets=bucketsReturned}
   end
   if opts.delete then
     files['mole']='program contents'

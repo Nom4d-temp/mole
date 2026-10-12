@@ -1,6 +1,6 @@
--- Mole v1.4.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.3'
+local VERSION='1.4.4'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -280,7 +280,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.3 - first-time setup')
+  print('\nMole 1.4.4 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for each default, or q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -569,39 +569,63 @@ local function knownStep(target,mode)
   log(tostring(why)..'; looking for another visited route.')
   return false,why
 end
--- Optimistic A* plans emergency excavation; each cell is inspected before digging.
--- A one-cell positive-edge margin lets even a single-column shaft be bypassed.
-local function escapePath()
-  local start=key(s.p)
-  local open={copy(s.p)}; local cost={[start]=0}; local previous={}; local positions={[start]=copy(s.p)}
-  local closed={}
-  local function distance(p) return math.abs(p.x)+math.abs(p.y)+math.abs(p.z) end
-  while #open>0 do
-    local best=1
-    for i=2,#open do
-      if cost[key(open[i])]+distance(open[i])<cost[key(open[best])]+distance(open[best]) then best=i end
+-- Shared A* search with a stable binary heap. Equal-cost choices keep their
+-- insertion order; the caller supplies movement bounds, obstacles and budget.
+local function findPath(start,goal,neighbors,allowed,estimate,budget)
+  local heap={};local sequence=0
+  local function earlier(a,b) return a.score<b.score or a.score==b.score and a.order<b.order end
+  local function push(p,cost)
+    sequence=sequence+1
+    local item={p=p,cost=cost,score=cost+estimate(p),order=sequence};local i=#heap+1
+    while i>1 do
+      local parent=math.floor(i/2)
+      if not earlier(item,heap[parent]) then break end
+      heap[i]=heap[parent];i=parent
     end
-    local p=table.remove(open,best); local pk=key(p)
-    if not closed[pk] then
+    heap[i]=item
+  end
+  local function pop()
+    local first=heap[1];local last=table.remove(heap)
+    if #heap>0 then
+      local i=1
+      while i*2<=#heap do
+        local child=i*2
+        if child+1<=#heap and earlier(heap[child+1],heap[child]) then child=child+1 end
+        if not earlier(heap[child],last) then break end
+        heap[i]=heap[child];i=child
+      end
+      heap[i]=last
+    end
+    return first
+  end
+  local sk=key(start);local costs={[sk]=0};local previous={};local positions={[sk]=copy(start)};local closed={}
+  push(copy(start),0)
+  while #heap>0 do
+    local item=pop();local p=item.p;local pk=key(p)
+    if not closed[pk] and item.cost==costs[pk] then
       closed[pk]=true
-      if same(p,origin) then
-        local reverse={}; local k=pk
-        while k~=start do reverse[#reverse+1]=positions[k]; k=previous[k] end
-        local path={}; for i=#reverse,1,-1 do path[#path+1]=copy(reverse[i]) end
+      if goal(p) then
+        local reverse={};local k=pk
+        while k~=sk do reverse[#reverse+1]=positions[k];k=previous[k] end
+        local path={};for i=#reverse,1,-1 do path[#path+1]=copy(reverse[i]) end
         return path
       end
-      for _,q in ipairs(adjacent(p)) do
-        local k=key(q)
-        if q.x>=0 and q.x<=c.width and q.z>=0 and q.z<=c.length and q.y>=0 and q.y<=c.depth
-          and not s.blocked[k] and not closed[k] then
-          local n=cost[pk]+1
-          if n+distance(q)<=fuel()-c.fuelMargin and (not cost[k] or n<cost[k]) then
-            cost[k]=n; previous[k]=pk; positions[k]=q; open[#open+1]=q
-          end
+      for _,q in ipairs(neighbors(p)) do
+        local k=key(q);local n=item.cost+1
+        if not closed[k] and allowed(q) and n+estimate(q)<=budget and (not costs[k] or n<costs[k]) then
+          costs[k]=n;previous[k]=pk;positions[k]=q;push(q,n)
         end
       end
     end
   end
+end
+-- Optimistic A* plans emergency excavation; each cell is inspected before digging.
+-- A one-cell positive-edge margin lets even a single-column shaft be bypassed.
+local function escapePath()
+  return findPath(s.p,function(p) return same(p,origin) end,adjacent,
+    function(p) return p.x>=0 and p.x<=c.width and p.z>=0 and p.z<=c.length
+      and p.y>=0 and p.y<=c.depth and not s.blocked[key(p)] end,
+    function(p) return math.abs(p.x)+math.abs(p.y)+math.abs(p.z) end,fuel()-c.fuelMargin)
 end
 local function excavateHome()
   local path=escapePath()
@@ -609,7 +633,6 @@ local function excavateHome()
   local q=path[1]
   local ok,why=pcall(step,q,'push',false)
   if not ok then
-    local message=tostring(why)
     if s.pending or not (obstruction(why) or failureCode(why)=='PROTECTED_BLOCK' or failureCode(why)=='DIG_BLOCKED') then error(why,0) end
     s.blocked[key(q)]=true; save()
     log('Return detour blocked; trying another approach.')
@@ -631,7 +654,6 @@ local function homeStep()
       -- Try reopening the original passage before excavating around it.
       local reopened,err=pcall(step,target,'pop',false)
       if reopened then return end
-      local message=tostring(err)
       if s.pending or not (obstruction(err) or failureCode(err)=='PROTECTED_BLOCK' or failureCode(err)=='DIG_BLOCKED') then error(err,0) end
       s.service.excavating=true; save()
       log('No clear recorded route; excavating a detour toward home.')
@@ -670,6 +692,9 @@ local function organizeFuel(inv)
   local zone=math.min(inv.size(),math.max(s.fuelZone or 0,prefix))
   if s.fuelZone~=zone then s.fuelZone=zone;save() end
   if zone==0 or type(inv.pushItems)~='function' then return end
+  local remaining=0
+  for i=1,zone do if contents[i] and c.fuel[contents[i].name] then remaining=remaining+1 end end
+  if remaining==prefix then return end -- Already organized; avoid repeated peripheral reads.
   for target=1,zone do
     contents=inv.list();local source
     for i=target,zone do if contents[i] and c.fuel[contents[i].name] then source=i;break end end
@@ -1136,31 +1161,15 @@ local function settleEmergency()
   e.pending=nil;save()
 end
 local function emergencyPath()
-  local e=s.emergency;local start=key(e.p);local open={copy(e.p)}
-  local cost={[start]=0};local previous={};local positions={[start]=copy(e.p)};local closed={}
-  while #open>0 do
-    local best=1
-    for i=2,#open do if cost[key(open[i])]+open[i].y<cost[key(open[best])]+open[best].y then best=i end end
-    local p=table.remove(open,best);local pk=key(p)
-    if not closed[pk] then
-      closed[pk]=true
-      if p.y==0 then
-        local reverse={};local k=pk
-        while k~=start do reverse[#reverse+1]=positions[k];k=previous[k] end
-        return reverse[#reverse]
-      end
-      local choices={{x=p.x,y=p.y-1,z=p.z},{x=p.x+1,y=p.y,z=p.z},
-        {x=p.x-1,y=p.y,z=p.z},{x=p.x,y=p.y,z=p.z+1},{x=p.x,y=p.y,z=p.z-1}}
-      for _,q in ipairs(choices) do
-        local k=key(q);local n=cost[pk]+1
-        if q.y>=0 and math.abs(q.x)<=c.emergencyRadius and math.abs(q.z)<=c.emergencyRadius
-          and not e.blocked[k] and not closed[k] and n+q.y<=fuel()-math.min(c.emergencyFuelMargin,math.max(0,fuel()-e.p.y-8))
-          and (not cost[k] or n<cost[k]) then
-          cost[k]=n;previous[k]=pk;positions[k]=q;open[#open+1]=q
-        end
-      end
-    end
-  end
+  local e=s.emergency
+  local available=fuel()-math.min(c.emergencyFuelMargin,math.max(0,fuel()-e.p.y-8))
+  local path=findPath(e.p,function(p) return p.y==0 end,
+    function(p) return {{x=p.x,y=p.y-1,z=p.z},{x=p.x+1,y=p.y,z=p.z},
+      {x=p.x-1,y=p.y,z=p.z},{x=p.x,y=p.y,z=p.z+1},{x=p.x,y=p.y,z=p.z-1}} end,
+    function(p) return p.y>=0 and math.abs(p.x)<=c.emergencyRadius and math.abs(p.z)<=c.emergencyRadius
+      and not e.blocked[key(p)] end,
+    function(p) return p.y end,available)
+  return path and path[1]
 end
 local function emergencyTrash()
   local urgent=freeSlots()<2
