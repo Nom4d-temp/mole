@@ -1,6 +1,6 @@
--- Mole v1.6.8: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.9: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.8'
+local VERSION='1.6.9'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -1091,7 +1091,7 @@ local function service()
     unload()
     organizeFuel(peripheral.wrap('front'))
     if s.service.reason=='Quarry complete' then
-      s.phase='done'; save(); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run mole new.'); return false
+      s.phase='done'; save(); pcall(net.status);pcall(net.flush); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run mole new.'); return false
     end
     if s.service.pause then
       if s.companionReturn and s.companionReturn.result=='accepted' then
@@ -1099,7 +1099,7 @@ local function service()
         for _,r in ipairs(s.companionRequests or {}) do if r.id==s.companionReturn.id then r.result='completed' end end
         net.receipt(s.companionReturn.id,'completed','Home and paused.')
       end
-      s.phase='paused'; save(); log('Refueling deferred while paused. Fuel: '..fuelText()..'.')
+      s.phase='paused'; save(); pcall(net.status);pcall(net.flush); log('Refueling deferred while paused. Fuel: '..fuelText()..'.')
       log(s.service.reason=='User requested return' and 'Returned home and paused as requested. Run mole resume to resume.' or 'Paused at the starting chest: '..s.service.reason..'. Resolve the issue, then run mole resume.'); return false
     end
     local target=s.service.target or s.service.path[#s.service.path] or origin
