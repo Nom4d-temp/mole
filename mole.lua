@@ -1,6 +1,6 @@
--- Mole v1.4.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.6: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.5'
+local VERSION='1.4.6'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -48,7 +48,7 @@ local function generatedStartup(content,program)
     or compact=="iffs.exists('quarry-data/state.a')orfs.exists('quarry-data/state.b')thenshell.run('mole')end"
 end
 if argv[1]=='delete' then
-  print('This removes Mole, its saved jobs, recovery data, and settings.')
+  print('This removes Mole, its saved jobs, emergency data, and settings.')
   write('Are you sure? yes/no: ')
   if read():match('^%s*(.-)%s*$'):lower()~='yes' then print('Deletion cancelled.'); return end
   local program=shell.getRunningProgram()
@@ -87,7 +87,7 @@ local CP=ROOT..'/config'; local SP=ROOT..'/state'
 -- Reset before loading or validating old files: damaged saves must not block it.
 if argv[1]=='reset' then
   fs.delete(ROOT); fs.makeDir(ROOT); writeFile(CP,defaults)
-  print('[Mole] Reset complete. Saved jobs, recovery data, and custom settings cleared.')
+  print('[Mole] Reset complete. Saved jobs, emergency data, and custom settings cleared.')
   print('Fuel and carried items are still in the turtle. No movement was made.')
   print('Place the turtle at your chosen start with a chest behind it, then run mole.')
   return
@@ -127,9 +127,7 @@ local function key(p) return p.x..','..p.y..','..p.z end
 local function fuel() local f=turtle.getFuelLevel(); return f=='unlimited' and math.huge or f end
 local function capacity() local f=turtle.getFuelLimit(); return f=='unlimited' and math.huge or f end
 local function depthText(p)
-  local relative=tostring(p.y)..' blocks below start'
-  if s and type(s.startY)=='number' then return 'Y '..(s.startY-p.y)..' ('..relative..')' end
-  return relative..' (world Y unknown)'
+  return 'Y '..(s.startY-p.y)..' ('..p.y..' blocks below start)'
 end
 local function ascentDistance(depth)
   local extra=s and s.startY and s.emergencyTargetY and math.max(0,s.emergencyTargetY-s.startY) or 0
@@ -272,6 +270,13 @@ if argv[1]=='help' then
   return
 end
 if argv[1]=='settings' or argv[1]=='config' then settingsMenu(); return end
+-- Interrupted actions remain marked so an uncertain pose cannot be resumed.
+if s and (type(s.startY)~='number' or s.startY~=s.startY or math.abs(s.startY)==math.huge or s.startY%1~=0) then
+  log('Saved job has no valid starting Y. Retrieve the turtle, then use mole reset and start a new job.');return
+end
+if s and (s.pending or s.recovery or s.emergency and s.emergency.pending) then
+  log('Movement was interrupted; position is uncertain. Retrieve the turtle, then use mole reset and start a new job.');return
+end
 local fresh=not s or argv[1]=='new'
 if fresh then
   if argv[1] and argv[1]~='new' and argv[1]~='init' then
@@ -280,7 +285,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.5 - first-time setup')
+  print('\nMole 1.4.6 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -341,33 +346,14 @@ ensureStartup()
 if argv[1]=='status' then
   if s.emergency then
     log('State: '..s.phase..'; emergency reason: '..s.emergency.reason)
-    log('Upward moves still required (conservative estimate): '..s.emergency.p.y..'; fuel '..fuel())
+    log('Upward moves still required: '..s.emergency.p.y..'; fuel '..fuel())
     if s.emergency.targetY then log('Emergency target: Y '..s.emergency.targetY) end
     log('Emergency position is relative to the escape start; the mining job stays paused.'); return
   end
   log('Saved step '..s.index..'; fuel '..fuel())
-  log('State: '..s.phase..'; '..((s.pending or s.recovery) and 'saved estimate: ' or '')..depthText(s.p))
-  if s.recovery then
-    for i,h in ipairs(s.recovery.hypotheses) do
-      log('Recovery hypothesis '..i..': '..key(h.p)..', facing '..h.p.d..', route '..#h.route)
-    end
-  else log('Local tunnel position '..key(s.p)..', facing '..s.p.d) end
-  if s.pending then print(textutils.serialize(s.pending)) end
+  log('State: '..s.phase..'; '..depthText(s.p))
+  log('Local tunnel position '..key(s.p)..', facing '..s.p.d)
   return
-end
-if argv[1]=='recover' then
-  assert(s.pending,'No original uncertain action; run mole for automatic chest recovery.')
-  assert(argv[2]=='before' or argv[2]=='after','Use mole recover before|after after checking the physical pose.')
-  if argv[2]=='after' then
-    s.p=copy(s.pending.after)
-    if s.pending.route=='push' then s.route[#s.route+1]=copy(s.p)
-    elseif s.pending.route=='pop' then table.remove(s.route)
-    elseif s.pending.route=='out' then
-      s.service.at=s.service.at+1
-      s.route={}; for i=1,s.service.at do s.route[i]=copy(s.service.path[i]) end
-    end
-  end
-  s.pending=nil; save(); log('Pose confirmed; run mole to continue.'); return
 end
 local dx={0,1,0,-1}; local dz={1,0,-1,0}
 -- Only cells reached by a successful move become route-planning nodes.
@@ -455,11 +441,11 @@ local function refuelTo(n)
     end
   end
   turtle.select(1)
-  if s and (s.phase=='home' or s.phase=='recovery' or s.phase=='emergency') and fuel()>before then
+  if s and (s.phase=='home' or s.phase=='emergency') and fuel()>before then
     log('Return fuel safety: used carried fuel ('..before..' -> '..fuel()..' units).')
   end
 end
--- Enough for a failed hypothesis, retracing it, and the correct return.
+-- Conservative reserve for the return journey and obstacle detours.
 local function reserve(n) return 3*(n+2)+c.fuelMargin end
 local function freeSlots()
   local n=0
@@ -624,7 +610,7 @@ local function excavateHome()
     log('Return detour blocked; trying another approach.')
   end
   -- Never journal an optimistic path as visited. Successful moves alone extend
-  -- the physical trail, so interruptions still have a truthful recovery route.
+  -- the physical trail, so interruptions still have a truthful return route.
   local connected=knownPath(origin,s.p)
   if connected then s.route=connected; s.service.excavating=nil; save() end
 end
@@ -796,7 +782,7 @@ local function service()
     local needed=n+math.max(reserve(n),escapeNeeded>0 and escapeNeeded+c.emergencyFuelMargin+32 or 0)+64
     assert(needed<=capacity() or fuel()==math.huge,'Route exceeds fuel capacity; reduce depth or vein limits.')
     local fuelTarget=math.min(capacity(),math.max(c.fuelTarget,needed))
-    log('Fuel target: '..fuelTarget..' units, for '..n..' moves back to work, a safe return/recovery reserve, and more mining.')
+    log('Fuel target: '..fuelTarget..' units, for '..n..' moves back to work, a safe return reserve, and more mining.')
     if fuel()>=fuelTarget then
       log('Fuel already meets the target; no additional fuel needed.')
     else
@@ -919,203 +905,15 @@ local function vein()
   end
   s.vein=nil; save(); return true
 end
--- Recovery keeps both pose hypotheses and updates them with the same physical
--- actions. Failed trials are naturally retraced by the next candidate's trail.
 local function clone(v)
   if type(v)~='table' then return v end
   local t={}; for k,x in pairs(v) do t[k]=clone(x) end; return t
 end
-local function applyRecovery(h,op)
-  if op=='right' or op=='left' then h.p.d=(h.p.d+(op=='left' and -1 or 1))%4; return end
-  local q=copy(h.p)
-  if op=='up' then q.y=q.y-1 elseif op=='down' then q.y=q.y+1
-  else q.x=q.x+dx[q.d+1]; q.z=q.z+dz[q.d+1] end
-  -- Erase loops in the physical trace, preserving a route rooted at origin.
-  local found
-  if q.x==0 and q.y==0 and q.z==0 then found=0
-  else for i=#h.route,1,-1 do if same(q,h.route[i]) then found=i; break end end end
-  if found then for i=#h.route,found+1,-1 do h.route[i]=nil end
-  else h.route[#h.route+1]=copy(q) end
-  h.p=q
-end
-local function eachHypothesis(fn)
-  for _,h in ipairs(s.recovery.hypotheses) do fn(h) end
-  for _,h in ipairs(s.recovery.failed or {}) do fn(h) end
-end
-local function compactHypotheses()
-  local seen,unique={},{}
-  for _,h in ipairs(s.recovery.hypotheses) do
-    local k=key(h.p)..':'..h.p.d
-    for _,p in ipairs(h.route) do k=k..';'..key(p) end
-    if not seen[k] then seen[k]=true; unique[#unique+1]=h end
-  end
-  s.recovery.hypotheses=unique
-  assert(#unique+#(s.recovery.failed or {})<=16,'Repeated recovery interruptions produced too many hypotheses; saved safely.')
-end
-local function beginRecovery()
-  local pending=s.pending
-  if not pending then return end
-  local before={p=copy(pending.before),route=clone(s.route)}
-  local after={p=copy(pending.after),route=clone(s.route)}
-  if pending.route=='push' then after.route[#after.route+1]=copy(after.p)
-  elseif pending.route=='pop' then table.remove(after.route)
-  elseif pending.route=='out' then
-    after.route={}
-    for i=1,s.service.at+1 do after.route[i]=copy(s.service.path[i]) end
-  end
-  local hypotheses={before,after}
-  -- Fuel is a useful ordering hint for movement, not a required dependency.
-  if type(pending.fuel)=='number' and fuel()==pending.fuel-1 then hypotheses={after,before} end
-  local resumePath=clone(s.service and s.service.path or s.route)
-  if s.service and s.service.reset then resumePath={} end
-  local resumeVein=clone(s.vein)
-  -- Digging precedes the move. Even if the move never happened, its target
-  -- is cleared; preserve the DFS branch so ores beyond that block are found.
-  if s.phase=='work' and resumeVein and pending.route=='push' and not pending.probe then
-    local frame=resumeVein.stack[#resumeVein.stack]
-    if frame and frame.next<6 and same(pending.before,frame.p)
-      and same(pending.after,neighbour(frame.p,scanDirection(frame))) then
-      resumePath=clone(after.route)
-      frame.next=frame.next+1; resumeVein.count=resumeVein.count+1
-      resumeVein.stack[#resumeVein.stack+1]=scanFrame(pending.after)
-      s.seen[key(pending.after)]=true
-    end
-  end
-  s.recovery={hypotheses=hypotheses,pause=s.service and s.service.pause or false,
-    resumePath=resumePath,resumeVein=resumeVein,
-    reason=s.service and s.service.reason or 'Interrupted action recovery'}
-  s.pending=nil; s.phase='recovery'; compactHypotheses(); save()
-  log('Uncertain action: homing to the starting chest without digging.')
-end
-local function settleRecoveryAction()
-  local r=s.recovery; local pending=r.pending
-  if not pending then return end
-  local current=turtle.getFuelLevel()
-  if pending.op~='right' and pending.op~='left' and type(pending.fuel)=='number' and type(current)=='number' then
-    -- Recovery never refuels between recording intent and settling its result.
-    if current==pending.fuel-1 then
-      eachHypothesis(function(h) applyRecovery(h,pending.op) end)
-    elseif current~=pending.fuel then
-      error('Fuel changed externally during recovery; stopped safely.',0)
-    end
-  else
-    for _,list in ipairs({r.hypotheses,r.failed or {}}) do
-      local n=#list
-      for i=1,n do
-        local moved=clone(list[i]); applyRecovery(moved,pending.op)
-        list[#list+1]=moved
-      end
-    end
-  end
-  r.pending=nil; compactHypotheses(); save()
-end
-local function recoveryAction(op)
-  if op~='right' and op~='left' then refuelTo(c.fuelMargin+1) end
-  local r=s.recovery
-  r.pending={op=op,fuel=turtle.getFuelLevel()}; save()
-  local fn=op=='right' and turtle.turnRight or op=='left' and turtle.turnLeft or op=='up' and turtle.up
-    or op=='down' and turtle.down or turtle.forward
-  local ok=fn()
-  if ok then eachHypothesis(function(h) applyRecovery(h,op) end) end
-  r.pending=nil; save(); return ok
-end
-local function recoveryFace(h,d)
-  while h.p.d~=d do
-    local op=(d-h.p.d)%4==3 and 'left' or 'right'
-    assert(recoveryAction(op),'Recovery turn failed')
-  end
-end
-local function anchorMatches()
-  if not peripheral.hasType('front','inventory') then return false end
-  if s.anchor then
-    return peripheral.getType('front')==s.anchor.type and peripheral.wrap('front').size()==s.anchor.size
-  end
-  -- Legacy jobs created before v1.1 did not record a chest signature.
-  local ok,b=turtle.inspect()
-  return ok and (b.name=='minecraft:chest' or b.name=='minecraft:trapped_chest' or b.name=='minecraft:barrel')
-end
-local function homeRecovery()
-  if s.pending then beginRecovery() end
-  settleRecoveryAction()
-  local r=s.recovery
-  -- Check a pessimistic budget before starting any uncertain travel.
-  local budget,shortest=0,math.huge
-  for _,h in ipairs(r.hypotheses) do budget=budget+#h.route; shortest=math.min(shortest,#h.route) end
-  if #r.hypotheses>0 then budget=2*budget-shortest end
-  refuelTo(budget+c.fuelMargin)
-  if fuel()<budget+c.fuelMargin then failure('RETURN_RECOVERY_FUEL','Insufficient fuel for chest recovery; saved hypotheses retained.') end
-  while #r.hypotheses>0 do
-    local h=r.hypotheses[1]; local reachable=true
-    log('Recovery trial: '..#h.route..' steps to the predicted origin.')
-    while #h.route>0 do
-      local n=#h.route; local q=n==1 and {x=0,y=0,z=0} or h.route[n-1]
-      assert(math.abs(q.x-h.p.x)+math.abs(q.y-h.p.y)+math.abs(q.z-h.p.z)==1,
-        'Invalid recovery trail; stopped safely.')
-      local op,inspect
-      if q.y<h.p.y then op='up'; inspect=turtle.inspectUp
-      elseif q.y>h.p.y then op='down'; inspect=turtle.inspectDown
-      else
-        recoveryFace(h,q.x~=h.p.x and (q.x>h.p.x and 1 or 3) or (q.z>h.p.z and 0 or 2))
-        op='forward'; inspect=turtle.inspect
-      end
-      local moved=false
-      for _=1,c.retries do
-        local exists,b=inspect()
-        local per=op=='up' and 'top' or op=='down' and 'bottom' or 'front'
-        if protectedBlock(exists and b or nil,per) then break end
-        if exists and not passable[b.name] and c.trash[b.name] then break end
-        local deepest=-math.huge
-        eachHypothesis(function(candidate) deepest=math.max(deepest,candidate.p.y) end)
-        local climb=ascentDistance(deepest)
-        refuelTo(math.max(#h.route+c.fuelMargin,climb+c.emergencyFuelMargin+9))
-        if #h.route>climb and fuel()<=climb+c.emergencyFuelMargin+8 then
-          failure('RETURN_FUEL_LOW','Recovery would consume the emergency ascent reserve')
-        end
-        if fuel()<=c.fuelMargin then failure('RECOVERY_FUEL_LOW','Recovery fuel margin reached; stopped safely.') end
-        if recoveryAction(op) then
-          if exists then passable[b.name]=true end
-          moved=true; break
-        end
-        sleep(0.2)
-      end
-      if not moved then reachable=false; break end
-    end
-    if reachable then
-      recoveryFace(h,2)
-      if anchorMatches() then
-        -- Reanchor, then replay the saved cleared route to the pending vein
-        -- branch. A tunnel miner must not lose ores behind already mined air.
-        s.p={x=0,y=0,z=0,d=2}; s.route={}; s.vein=r.resumeVein
-        s.service={path=r.resumePath or {},at=0,pause=r.pause,reason=r.reason}
-        s.phase='dock'; s.recovery=nil; save()
-        log('Starting chest found. Resuming saved tunnel step '..s.index..'.')
-        return
-      end
-    end
-    -- Keep the failed candidate too: if an obstruction was temporary, the
-    -- player can clear it and retry without reconstructing the turtle's pose.
-    r.failed=r.failed or {}; r.failed[#r.failed+1]=table.remove(r.hypotheses,1); save()
-  end
-  r.hypotheses=r.failed or {}; r.failed=nil; save()
-  failure('NO_CHEST_CONFIRMATION','Starting chest not found on any cleared route. No blocks were dug during normal recovery.')
-end
-
--- Last-resort escape uses its own relative coordinates and action journal.
--- Physical up is independent of uncertain mining X/Z or facing. A conservative
--- height across all recovery hypotheses avoids stopping below the target.
+-- Last-resort escape starts from the last confirmed mining position.
 local function startEmergency(reason)
-  local depths={s.p.y}
-  if s.recovery then
-    depths={}
-    for _,list in ipairs({s.recovery.hypotheses or {},s.recovery.failed or {}}) do
-      for _,h in ipairs(list) do depths[#depths+1]=h.p.y end
-    end
-  elseif s.pending then depths={s.pending.before.y,s.pending.after.y} end
-  local deepest=-math.huge; local shallowest=math.huge
-  for _,d in ipairs(depths) do deepest=math.max(deepest,d);shallowest=math.min(shallowest,d) end
-  assert(deepest~=-math.huge,'No height estimate for emergency ascent; saved safely.')
-  s.emergency={reason=reason,p={x=0,y=ascentDistance(deepest),z=0,d=0},blocked={},
-    heightUncertainty=deepest-shallowest,targetY=s.emergencyTargetY or s.startY}
+  assert(not s.pending and not s.recovery,'Position is uncertain; retrieve the turtle and use mole reset.')
+  s.emergency={reason=reason,p={x=0,y=ascentDistance(s.p.y),z=0,d=0},blocked={},
+    targetY=s.emergencyTargetY or s.startY}
   s.phase='emergency';save()
   log('EMERGENCY ASCENT: '..reason)
   log('Trying to climb '..s.emergency.p.y..' blocks to '..(s.emergency.targetY and 'Y '..s.emergency.targetY or 'the starting elevation')..'. Mining is suspended.')
@@ -1128,23 +926,6 @@ local function emergencyAction(op,q)
   local ok=fn()
   if ok then e.p=copy(q) end
   e.pending=nil;save();return ok
-end
-local function settleEmergency()
-  local e=s.emergency;local pending=e.pending
-  if not pending then return end
-  if pending.op=='right' or pending.op=='left' then
-    -- A turn consumes no fuel. Reanchor the horizontal map to actual facing;
-    -- absolute orientation is unnecessary for a vertical retrieval escape.
-    e.p={x=0,y=pending.before.y,z=0,d=0};e.blocked={}
-  elseif type(pending.fuel)=='number' and fuel()~=math.huge then
-    if fuel()==pending.fuel-1 then e.p=copy(pending.after)
-    elseif fuel()==pending.fuel then e.p=copy(pending.before)
-    else error('Fuel changed externally during emergency recovery; saved safely.',0) end
-  else
-    e.p={x=0,y=math.max(pending.before.y,pending.after.y),z=0,d=0};e.blocked={}
-    if pending.op=='up' then e.heightUncertainty=e.heightUncertainty+1 end
-  end
-  e.pending=nil;save()
 end
 local function emergencyPath()
   local e=s.emergency
@@ -1193,7 +974,6 @@ local function emergencyDig(side,inspect,per)
   return (side=='up' and turtle.digUp or turtle.dig)()
 end
 local function emergencyAscent()
-  settleEmergency()
   local e=s.emergency
   while e.p.y>0 do
     refuelTo(e.p.y+c.emergencyFuelMargin+8)
@@ -1241,11 +1021,10 @@ local function emergencyAscent()
   s.phase='rescued';save()
   log('Emergency ascent complete. Mining paused. Turtle needs to be returned to its starting chest.')
   log('Remaining fuel after emergency ascent: '..fuelText()..'.')
-  if e.heightUncertainty>0 then log('Height was uncertain; the turtle may finish '..e.heightUncertainty..' block(s) above the target.') end
   log('This is a retrieval point, not confirmation of open sky. Use mole reset only after positioning the turtle for a new job.')
 end
 local emergencyFailures={NO_ROUTE=true,NO_HOME_ROUTE=true,INSUFFICIENT_RETURN_FUEL=true,
-  RETURN_FUEL_LOW=true,NO_CHEST_CONFIRMATION=true,RETURN_RECOVERY_FUEL=true,RECOVERY_FUEL_LOW=true,
+  RETURN_FUEL_LOW=true,
   MISSING_CHEST=true,INVENTORY_FULL=true,FUEL_RESERVE=true,NO_FUEL=true}
 local function fallbackReason(why) return emergencyFailures[failureCode(why)]==true end
 local function attemptEmergency(why)
@@ -1272,7 +1051,6 @@ if s.phase=='paused' then
 end
 -- Resume first services the saved route, then resumes a saved vein or quarry cell.
 local ok,err=pcall(function()
-  if s.pending or s.recovery then homeRecovery() end
   if argv[1]=='return' then
     if s.phase=='work' or s.phase=='out' then
       local destination=s.phase=='out' and clone(s.service.path) or nil
@@ -1321,8 +1099,7 @@ end)
 if not ok then
   log(tostring(err))
   if s.pending or s.recovery then
-    if fallbackReason(err) then attemptEmergency(err);return end
-    log('Recovery saved. Run mole (or let startup run it) to retry automatic chest homing.'); return
+    log('Movement was interrupted; position is uncertain. Retrieve the turtle, then use mole reset and start a new job.'); return
   end
   -- An error during a return must not overwrite the original outbound route.
   if s.phase=='work' then

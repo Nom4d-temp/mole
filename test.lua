@@ -175,9 +175,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.5','9.0.0')
+    local source=program:gsub('1%.4%.6','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.5','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.4%.6','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -225,6 +225,7 @@ local function scenario(opts)
     p.y=2;world['0,1,0']=nil;world['0,2,0']=nil
     local old={seq=10,p=clone(p),route={{x=0,y=1,z=0,d=0},{x=0,y=2,z=0,d=0}},
       index=6,phase='work',seen={},shape={w=width,l=length,h=depth}}
+    if not opts.legacy and not opts.activeLegacyFrame then old.startY=64;old.emergencyTargetY=64 end
     files['quarry-data/state.a']=textutils.serialize(old)
     inputs={}
   end
@@ -233,6 +234,7 @@ local function scenario(opts)
     local old={seq=10,p=clone(p),route={{x=0,y=1,z=0,d=0},{x=0,y=2,z=0,d=0},{x=0,y=2,z=1,d=0}},
       index=3,phase='work',seen={},layoutVersion=2,anchor={type='minecraft:chest',size=27},shape={w=width,l=length,h=depth},
       vein={stack={{p=clone(p),next=0}},count=0}}
+    if not opts.legacy and not opts.activeLegacyFrame then old.startY=64;old.emergencyTargetY=64 end
     files['quarry-data/state.a']=textutils.serialize(old)
   end
   if opts.outboundObstacle then
@@ -246,6 +248,7 @@ local function scenario(opts)
       layoutVersion=2,anchor={type='minecraft:chest',size=27},shape={w=width,l=length,h=depth},
       service={path={cleared[1],cleared[2],cleared[3],cleared[4],cleared[5],cleared[6]},at=0,
         target=cleared[6],reason='Inventory or fuel reserve'}}
+    if not opts.legacy and not opts.activeLegacyFrame then old.startY=64;old.emergencyTargetY=64 end
     files['quarry-data/state.a']=textutils.serialize(old)
   end
   if opts.emergencyCase then
@@ -256,7 +259,7 @@ local function scenario(opts)
     trail[#trail+1]={x=2,y=6,z=1};world['2,6,1']=nil;world['2,6,0']='minecraft:bedrock'
     if opts.escapeCeiling then world['2,5,1']='minecraft:bedrock' end
     if opts.escapeRoof then for x=-6,10 do for z=-7,9 do world[x..',5,'..z]='minecraft:bedrock' end end end
-    local saved={seq=10,p=clone(p),route=trail,index=10,phase='home',seen={},layoutVersion=2,
+    local saved={startY=64,emergencyTargetY=64,seq=10,p=clone(p),route=trail,index=10,phase='home',seen={},layoutVersion=2,
       shape={w=width,l=length,h=depth},service={path=clone(trail),target=clone(p),at=0,reason='Inventory or fuel reserve'}}
     if opts.escapeHigher then saved.startY=10;saved.emergencyTargetY=12 end
     if opts.unlimited then saved.phase='emergency';saved.emergency={reason='Test interrupted escape',p={x=0,y=6,z=0,d=0},blocked={},heightUncertainty=0} end
@@ -297,7 +300,10 @@ local function scenario(opts)
       turtle.drop=turtle.dropDown;turtle.dropUp=turtle.dropDown
     end
     run()
-    if opts.escapeInterrupt or opts.escapeTurnInterrupt then run() end
+    if opts.escapeInterrupt or opts.escapeTurnInterrupt then
+      local before=actions;run();assert(actions==before,'Moved after interrupted emergency action')
+      assert(table.concat(messages,'\n'):find('position is uncertain',1,true),'Missing interrupted-move instructions');return
+    end
     local state=checkpointState()
     if opts.escapeRoof or opts.escapeDropFails or opts.escapeAllValuable or opts.escapeFuel and opts.escapeFuel<6 then
       assert(state.phase=='emergency' and state.emergency,'Emergency failure did not remain resumable')
@@ -345,6 +351,15 @@ local function scenario(opts)
       else assert(files['startup.lua']==originalStartup,'Original startup not restored') end
     end
     return
+  end
+  if opts.legacy or opts.activeLegacyFrame then
+    assert(actions==0 and prompts==0,'Unsupported save moved or asked for Y')
+    assert(table.concat(messages,'\n'):find('no valid starting Y',1,true),'Missing unsupported-save instructions');return
+  end
+  if checkpointState() and checkpointState().pending then
+    local before=actions;local prior=prompts;run()
+    assert(actions==before and prompts==prior,'Interrupted move resumed or asked questions')
+    assert(table.concat(messages,'\n'):find('position is uncertain',1,true),'Missing interrupted-move instructions');return
   end
   if opts.falseFuelError then
     assert(not checkpointState().emergency and checkpointState().pending,'Message text caused a false emergency')
@@ -499,7 +514,7 @@ for at=1,140 do
   scenario({crash=true,at=at}); scenario({crashAfter=true,at=at});
   scenario({turnCrash=true,at=at}); scenario({turnCrash=true,crashAfter=true,at=at});
 end
-print('PASS: '..scenarioCount..' scenarios, guided setup, input validation/cancel, resume without prompts, startup preservation, legacy upgrade, tunnel trash retained, exposed veins, hidden ores left, bounds, automatic chest recovery, fuel and chest failures')
+print('PASS: '..scenarioCount..' scenarios, guided setup, input validation/cancel, resume without prompts, startup preservation, unsupported Y saves rejected, tunnel trash retained, exposed veins, hidden ores left, bounds, interrupted movement stops, fuel and chest failures')
 
 -- Optional comparison against a prior source file, outside the deliverable.
 local baseline=os.getenv('MOLE_BASELINE')

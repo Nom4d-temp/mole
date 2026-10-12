@@ -1,10 +1,10 @@
-# Mole 1.4.5
+# Mole 1.4.6
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
 **Meet Mole: your turtle’s next mining adventure.** Mole turns a CC: Tweaked mining turtle into a tunnel miner that searches for nearby ores while leaving ordinary stone in place wherever possible. Answer a few setup questions, give it a chest and some fuel, and let it get to work.
 
-Mole follows connected ore veins, brings its haul back to your chest, and manages refueling and trash disposal. Saved progress and automatic recovery help it pick up after interruptions, while simple commands let you change settings, start a new quarry, or update straight from GitHub.
+Mole follows connected ore veins, brings its haul back to your chest, and manages refueling and trash disposal. Saved progress helps it resume from confirmed checkpoints, while simple commands let you change settings, start a new quarry, or update straight from GitHub.
 
 ## What you need
 
@@ -34,7 +34,7 @@ This downloads Mole and saves it on your turtle as **mole**.
 
 **Length goes forward. Width goes to the turtle's right. Depth goes down from its starting block.** The column directly below the turtle is included in the mining area.
 
-Keep the starting chest in place. Keep other matching chests away from the mining area: the turtle uses this chest to find its way home after an interrupted move.
+Keep the starting chest in place so Mole can unload and refuel when it returns.
 
 ## 3. Start mining
 
@@ -63,7 +63,7 @@ Mole shows the depth needed to reach **Y -62** and lowers the default depth if n
 
 Progress and `mole status` show world Y and depth. Starting Y does not locate the turtle. Setup questions appear only for new jobs.
 
-**Emergency escape targets the starting elevation automatically.** If you start underground, this may still be underground. Existing saved jobs keep their settings and resume without asking for a starting Y; older jobs without one continue reporting depth below their start.
+**Emergency escape targets the starting elevation automatically.** If you start underground, this may still be underground. Saved jobs without a valid starting Y must be cleared with `mole reset` before starting again.
 
 Mole saves settings and progress and creates an automatic restart file. If you already have your own startup program, Mole keeps it; add `shell.run("mole")` to that file to enable automatic resuming.
 
@@ -84,14 +84,14 @@ At the chest, Mole unloads its haul, drops trash underneath the starting positio
 | `mole settings` | Change which blocks count as trash |
 | `mole return` | Return to the chest and pause |
 | `mole new` | Set up a new job after finishing or returning home |
-| `mole reset` | Clear saved jobs and recovery data, and restore all default settings |
+| `mole reset` | Clear saved jobs and emergency data, and restore all default settings |
 | `mole delete` | Uninstall Mole after a yes/no confirmation |
 | `mole update` | Check GitHub and safely install a newer version |
 | `mole help` | Show the short command list |
 
-While the miner is running, hold **Ctrl+T** to stop the program. Then type `mole return` if you want it to go home. Stopping can leave a move unfinished in the save file; automatic chest recovery handles this on the next launch.
+While the miner is running, hold **Ctrl+T** to stop the program. Then type `mole return` if you want it to go home. Stopping during movement can leave the saved position uncertain. Mole then refuses to resume: retrieve the turtle, place it at a safe starting point, and use `mole reset`.
 
-**Starting over after a problem:** run `mole reset`. This permanently clears the current job, saved routes, recovery information, previous-job archive, and custom settings, even if a saved file is damaged. It does not move the turtle or change its fuel or inventory. The program and startup file stay installed. Place the turtle at a safe starting corner with the chest behind it, then run `mole` for the normal setup questions.
+**Starting over after a problem:** run `mole reset`. This permanently clears the current job, saved routes, emergency information, previous-job archive, and custom settings, even if a saved file is damaged. It does not move the turtle or change its fuel or inventory. The program and startup file stay installed. Place the turtle at a safe starting corner with the chest behind it, then run `mole` for the normal setup questions.
 
 **Uninstalling:** run `mole delete`, then type `yes` to confirm. Any other answer cancels. This removes the running Mole program file, saved jobs, recovery data, custom settings, its update download/backup files, and its installation record. Fuel and carried items stay in the turtle, and it does not move.
 
@@ -99,17 +99,17 @@ When Mole replaces a supported startup file, it saves the original and restores 
 
 Do not pick up, move, or turn the turtle during a saved job. After a job is finished, you can move it to a new starting corner, put the chest behind it, and run `mole new`. If you paused an unfinished job to start a new one, that abandons the old job; its last state is saved as `quarry-data/previous-job` for reference.
 
-During normal returns, chest recovery, and emergency escape, Mole checks its own inventory for allowed fuel before stopping on a fuel limit. It uses carried coal, charcoal, or lava buckets when available and reports the new fuel level. Refueling happens before recording the next movement, so interrupted-move recovery remains consistent. If no usable fuel remains and it cannot continue safely, it keeps the saved return or escape state for retry.
+During normal returns and emergency escape, Mole checks its own inventory for allowed fuel before stopping on a fuel limit. It uses carried coal, charcoal, or lava buckets when available and reports the new fuel level. If no usable fuel remains and it cannot continue safely, it keeps the saved return or escape state for retry.
 
 ## Keep Mole working while you’re away
 
-If your modpack offers chunk-loading blocks or a tool such as **FTB Chunks**, we recommend using it to keep the whole mining area and starting chest loaded. Mole pauses when its chunk unloads and resumes its saved job when it loads again. Keeping the area loaded lets it work while you’re elsewhere, as long as the world or server is running.
+If your modpack offers chunk-loading blocks or a tool such as **FTB Chunks**, we recommend using it to keep the whole mining area and starting chest loaded. Mole pauses when its chunk unloads and can resume from a confirmed checkpoint when it loads again. An unload during movement requires retrieval and reset. Keeping the area loaded lets it work while you’re elsewhere, as long as the world or server is running.
 
 ## Safety features
 
-- **Saved progress and recovery:** Mole saves its work as it goes and resumes after a restart or chunk reload. If a movement was interrupted, it tries to confirm its position at the starting chest before continuing. Keep the chest in place and avoid moving or turning the turtle during a job.
+- **Saved progress and position checks:** Mole resumes confirmed checkpoints after a restart or chunk reload. An interrupted move or turn makes its position uncertain, so it stops and requires retrieval and reset. Keep the chest in place and avoid moving or turning the turtle during a job.
 - **Safer trips home:** Mole returns when inventory is full or fuel runs low. It uses known tunnels first, then tries to clear or dig around blocked return paths.
-- **Fuel reserves:** Mole adjusts its fuel needs for the journey back to work and keeps a return reserve. During returns and recovery, it can also use fuel carried in its inventory.
+- **Fuel reserves:** Mole adjusts its fuel needs for the journey back to work and keeps a return reserve. During returns and emergency escape, it can also use fuel carried in its inventory.
 - **Protected blocks and valuables:** Mole avoids configured protected blocks and detected machines. It keeps valuable items and normally drops trash only beneath its starting position.
 - **Depth guidance:** The starting Y lets Mole suggest a depth ending at Y -62 and warn before deeper mining. You can override this for other dimensions.
 - **Emergency escape:** If returning home or finding the chest fails, Mole tries to climb to its starting elevation (or an emergency target saved by an older version), with sideways detours around obstacles. If a full inventory blocks escape, it may discard listed trash while keeping fuel and valuables. At the target, it stays paused for retrieval; use `mole status` to check its progress.
@@ -140,7 +140,8 @@ An ore's block ID and the item it drops can be different. The block ID controls 
 | Chest full | Empty the chest, then run `mole` again. |
 | No chest behind you during setup | Place it directly behind the turtle at the same height, then press Enter to retry. |
 | Protected or unbreakable block | Check what it reported. It tries normal home routes and detours first, then emergency ascent if the return fails. Check `mole status`; a completed emergency escape stays paused for retrieval. |
-| Starting chest not found during recovery | Mole attempts its emergency ascent if chest recovery fails. Use `mole status` to check the escape progress, then retrieve the turtle. It uses a conservative height estimate and keeps the old job suspended. |
+| Movement interrupted / position uncertain | Retrieve the turtle, place it at a safe starting point, then use `mole reset` and `mole`. Automatic interrupted-move recovery is not supported. |
+| Saved job has no valid starting Y | Retrieve the turtle and use `mole reset` to create a new job with its starting Y. |
 | Download says file already exists | Follow the update steps below instead of downloading over the existing file. |
 | Download says 404 / not found | Check the username, repository name, branch, and filename in the URL. The repository must be public. |
 | Downloads are disabled or blocked | Ask the server owner to allow CC: Tweaked HTTP downloads from GitHub's raw file domain. |
@@ -152,7 +153,7 @@ Keep the turtle's mining area and chest loaded. The program cannot load chunks i
 1. Hold Ctrl+T if Mole is running, to return to the command prompt.
 2. Type `mole update`.
 3. Mole checks the version on GitHub. If a newer version is available, it downloads it, checks that it is a versioned Mole program with valid Lua syntax, and checks the saved download before replacing the program.
-4. Type `mole` to resume your saved job. An interrupted move still uses normal position recovery.
+4. Type `mole` to resume your saved job. If movement was interrupted, retrieve and reset the turtle before starting again.
 
 Your job, settings, fuel, inventory, and original startup backup are kept. The previous program is saved as `mole.update-backup`. A failed download leaves the current program in place. If installation fails, Mole tries to restore the previous program. Mole's automatic startup also restores that backup if an interrupted installation leaves the program missing. Custom startup scripts are left alone.
 
