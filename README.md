@@ -1,4 +1,4 @@
-# Mole 1.4.1
+# Mole 1.4.2
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -99,6 +99,8 @@ When Mole replaces a supported startup file, it saves the original and restores 
 
 Do not pick up, move, or turn the turtle during a saved job. After a job is finished, you can move it to a new starting corner, put the chest behind it, and run `mole new`. If you paused an unfinished job to start a new one, that abandons the old job; its last state is saved as `quarry-data/previous-job` for reference.
 
+During normal returns, chest recovery, and emergency escape, Mole checks its own inventory for allowed fuel before stopping on a fuel limit. It uses carried coal, charcoal, or lava buckets when available and reports the new fuel level. Refueling happens before recording the next movement, so interrupted-move recovery remains consistent. If no usable fuel remains and it cannot continue safely, it keeps the saved return or escape state for retry.
+
 ## Emergency ascent
 
 If normal home-return routes, return excavation, or chest recovery fail, Mole can switch to a last-resort ascent. It first tries straight up, then tries sideways detours around protected or unbreakable ceilings. Detours stay within eight blocks along each horizontal axis from the emergency navigation anchor and never descend. This can leave the chosen quarry area, so keep it away from builds.
@@ -176,6 +178,7 @@ The file contains the trash list, allowed fuel items, protected blocks, fuel tar
 ## AI disclosure
 
 Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
+
 
 
 

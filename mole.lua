@@ -1,6 +1,6 @@
--- Mole v1.4.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.1'
+local VERSION='1.4.2'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -276,7 +276,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.1 - first-time setup')
+  print('\nMole 1.4.2 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for each default, or q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -452,7 +452,8 @@ local function face(d)
 end
 local function refuelTo(n)
   n=math.min(n,capacity())
-  if fuel()>=n then turtle.select(1); return end -- Keep the fuel check; skip needless item queries.
+  local before=fuel()
+  if before>=n then turtle.select(1); return end -- Keep the fuel check; skip needless item queries.
   for i=1,16 do
     if fuel()>=n then break end
     local item=turtle.getItemDetail(i)
@@ -464,6 +465,9 @@ local function refuelTo(n)
     end
   end
   turtle.select(1)
+  if s and (s.phase=='home' or s.phase=='recovery' or s.phase=='emergency') and fuel()>before then
+    log('Return fuel safety: used carried fuel ('..before..' -> '..fuel()..' units).')
+  end
 end
 -- Enough for a failed hypothesis, retracing it, and the correct return.
 local function reserve(n) return 3*(n+2)+c.fuelMargin end
@@ -527,6 +531,7 @@ local function step(target, mode, clearedOnly)
   end
   if fuel()<1 then error('Out of fuel; stopped at '..key(s.p),0) end
   for _=1,c.retries do
+    refuelTo(reserve(#s.route+1)+2)
     local inspect=side=='up' and turtle.inspectUp or side=='down' and turtle.inspectDown or turtle.inspect
     local exists,b=inspect()
     local per=side=='up' and 'top' or side=='down' and 'bottom' or 'front'
@@ -954,6 +959,7 @@ local function settleRecoveryAction()
   r.pending=nil; compactHypotheses(); save()
 end
 local function recoveryAction(op)
+  if op~='right' and op~='left' then refuelTo(c.fuelMargin+1) end
   local r=s.recovery
   r.pending={op=op,fuel=turtle.getFuelLevel()}; save()
   local fn=op=='right' and turtle.turnRight or op=='left' and turtle.turnLeft or op=='up' and turtle.up
@@ -1011,6 +1017,7 @@ local function homeRecovery()
         local deepest=-math.huge
         eachHypothesis(function(candidate) deepest=math.max(deepest,candidate.p.y) end)
         local climb=ascentDistance(deepest)
+        refuelTo(math.max(#h.route+c.fuelMargin,climb+c.emergencyFuelMargin+9))
         if #h.route>climb and fuel()<=climb+c.emergencyFuelMargin+8 then
           error('Recovery would consume the emergency ascent reserve',0)
         end
@@ -1064,6 +1071,7 @@ local function startEmergency(reason)
   log('Trying to climb '..s.emergency.p.y..' blocks to '..(s.emergency.targetY and 'Y '..s.emergency.targetY or 'the starting elevation')..'. Mining is suspended.')
 end
 local function emergencyAction(op,q)
+  if op~='right' and op~='left' then refuelTo(1) end
   local e=s.emergency
   e.pending={before=copy(e.p),after=copy(q),op=op,fuel=turtle.getFuelLevel()};save()
   local fn=op=='up' and turtle.up or op=='right' and turtle.turnRight or op=='left' and turtle.turnLeft or turtle.forward
