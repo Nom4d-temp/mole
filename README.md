@@ -1,4 +1,4 @@
-# Mole 1.4.10
+# Mole 1.5.0
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -21,7 +21,7 @@ Right-click the mining turtle to open its screen. Type this command and press En
 wget https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua mole
 ```
 
-This downloads Mole and saves it on your turtle as **mole**.
+This downloads Mole and saves it on your turtle as **mole**. Run `mole` once to prepare the installation and see the command guide. This does not start a quarry.
 
 ## 2. Place the turtle and chest
 
@@ -41,7 +41,7 @@ Keep the starting chest in place so Mole can unload, refuel, and confirm its pos
 Type:
 
 ```text
-mole
+mole new
 ```
 
 The turtle asks:
@@ -65,7 +65,7 @@ Progress and `mole status` show world Y and depth. Starting Y does not locate th
 
 **Emergency escape targets the starting elevation automatically.** If you start underground, this may still be underground. Saved jobs without a valid starting Y must be cleared with `mole reset` before starting again.
 
-Mole saves settings and progress and creates an automatic restart file. If you already have your own startup program, Mole keeps it; add `shell.run("mole")` to that file to enable automatic resuming.
+Mole saves settings and progress. Its automatic restart file uses `mole resume`, so saved jobs can recover after a reload. Running plain `mole` only shows instructions; use `mole resume` to continue a stopped job. If you already have your own startup program, Mole keeps it; add `shell.run("mole", "resume")` to that file to enable automatic resuming.
 
 ## What will it dig?
 
@@ -79,11 +79,12 @@ At the chest, Mole unloads its haul, drops trash underneath the starting positio
 
 | Type this | What happens |
 | --- | --- |
-| `mole` | Start, resume, or answer the questions for a new turtle |
+| `mole` | Prepare the installation on first use; show the command guide afterward |
+| `mole resume` | Resume a saved job or recover interrupted movement |
 | `mole status` | Show saved progress, depth, and fuel |
 | `mole settings` | Change which blocks count as trash |
 | `mole return` | Return to the chest and pause |
-| `mole new` | Set up a new job after finishing or returning home |
+| `mole new` | Answer setup questions and start a new quarry |
 | `mole reset` | Clear saved jobs and recovery data, and restore all default settings |
 | `mole delete` | Uninstall Mole after a yes/no confirmation |
 | `mole update` | Check GitHub and safely install a newer version |
@@ -91,7 +92,7 @@ At the chest, Mole unloads its haul, drops trash underneath the starting positio
 
 While the miner is running, hold **Ctrl+T** to stop the program. Then type `mole return` if you want it to go home. Stopping during movement can leave the saved position uncertain. On the next launch, Mole follows saved routes without digging and checks the starting chest before resuming.
 
-**Starting over after a problem:** run `mole reset`. This permanently clears the current job, saved routes, recovery and emergency information, previous-job archive, and custom settings, even if a saved file is damaged. It does not move the turtle or change its fuel or inventory. The program and startup file stay installed. Place the turtle at a safe starting corner with the chest behind it, then run `mole` for the normal setup questions.
+**Starting over after a problem:** run `mole reset`. This permanently clears the current job, saved routes, recovery and emergency information, previous-job archive, and custom settings, even if a saved file is damaged. It does not move the turtle or change its fuel or inventory. The program and startup file stay installed. Place the turtle at a safe starting corner with the chest behind it, then run `mole new` for the setup questions.
 
 **Uninstalling:** run `mole delete`, then type `yes` to confirm. Any other answer cancels. This removes the running Mole program file, saved jobs, recovery data, custom settings, its update download/backup files, and its installation record. Fuel and carried items stay in the turtle, and it does not move.
 
@@ -136,24 +137,24 @@ An ore's block ID and the item it drops can be different. The block ID controls 
 
 | Message or problem | What to do |
 | --- | --- |
-| Not enough fuel | Refill consecutive fuel slots from slot 1 with coal, charcoal, or lava buckets, then run `mole` again. |
+| Not enough fuel | Refill consecutive fuel slots from slot 1 with coal, charcoal, or lava buckets, then run `mole resume`. |
 | Chest full | Empty the chest, then run `mole` again. |
 | No chest behind you during setup | Place it directly behind the turtle at the same height, then press Enter to retry. |
 | Protected or unbreakable block | Check what it reported. It tries normal home routes and detours first, then emergency ascent if the return fails. Check `mole status`; a completed emergency escape stays paused for retrieval. |
-| Movement interrupted / position uncertain | Run `mole` to attempt automatic chest recovery. If it cannot confirm the chest, it tries emergency ascent; check `mole status`. Keep the original chest in place and other matching chests away from the mining area. |
+| Movement interrupted / position uncertain | Run `mole resume` to attempt automatic chest recovery. If it cannot confirm the chest, it tries emergency ascent; check `mole status`. Keep the original chest in place and other matching chests away from the mining area. |
 | Saved job has no valid starting Y | Retrieve the turtle and use `mole reset` to create a new job with its starting Y. |
 | Download says file already exists | Follow the update steps below instead of downloading over the existing file. |
 | Download says 404 / not found | Check the username, repository name, branch, and filename in the URL. The repository must be public. |
 | Downloads are disabled or blocked | Ask the server owner to allow CC: Tweaked HTTP downloads from GitHub's raw file domain. |
 
-Keep the turtle's mining area and chest loaded. The program cannot load chunks itself. The automatic restart file resumes the saved job when the turtle boots; a stopped or paused program may still need you to run `mole`.
+Keep the turtle's mining area and chest loaded. The program cannot load chunks itself. The automatic restart file resumes the saved job when the turtle boots; a stopped or paused program may still need you to run `mole resume`.
 
 ## Update Mole
 
 1. Hold Ctrl+T if Mole is running, to return to the command prompt.
 2. Type `mole update`.
 3. Mole checks the version on GitHub. If a newer version is available, it downloads it, checks that it is a versioned Mole program with valid Lua syntax, and checks the saved download before replacing the program.
-4. Type `mole` to resume your saved job. Interrupted movement uses automatic position recovery.
+4. Type `mole resume` to resume your saved job. Interrupted movement uses automatic position recovery.
 
 Your job, settings, fuel, inventory, and original startup backup are kept. The previous program is saved as `mole.update-backup`. A failed download leaves the current program in place. If installation fails, Mole tries to restore the previous program. Mole's automatic startup also restores that backup if an interrupted installation leaves the program missing. Custom startup scripts are left alone.
 
@@ -161,7 +162,7 @@ Your job, settings, fuel, inventory, and original startup backup are kept. The p
 
 Mole stores its settings in `quarry-data/config` on the turtle. Most users can use the setup questions and `mole settings`. For advanced changes, stop Mole with Ctrl+T, then type `edit quarry-data/config`.
 
-The file contains the trash list, allowed fuel items, protected blocks, fuel target and reserves, emergency detour radius and fuel margin, movement retries, and ore-vein search limits. Make a backup before editing, keep the existing format, and save before running `mole` again. Changing dimensions in this file does not resize a saved job; use `mole new` for a different size. `mole reset` restores all default settings and clears the saved job.
+The file contains the trash list, allowed fuel items, protected blocks, fuel target and reserves, emergency detour radius and fuel margin, movement retries, and ore-vein search limits. Make a backup before editing, keep the existing format, and save before running `mole resume`. Changing dimensions in this file does not resize a saved job; use `mole new` for a different size. `mole reset` restores all default settings and clears the saved job.
 
 ## AI disclosure
 

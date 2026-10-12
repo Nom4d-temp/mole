@@ -11,6 +11,8 @@ local function scenario(opts)
   fs=nil;turtle=nil;peripheral=nil;textutils=nil;read=nil;write=nil;print=originalPrint;collectgarbage('collect')
   http=nil
   local messages={}
+  local clears=0
+  term={clear=function() clears=clears+1 end,setCursorPos=function(x,y) assert(x==1 and y==1) end}
   print=function(...) local parts={...};for i,v in ipairs(parts) do parts[i]=tostring(v) end;messages[#messages+1]=table.concat(parts,' ');originalPrint(...) end
   local files,objects={},{}; local seq=0
   local width=opts.width or 3; local length=opts.length or 3; local depth=opts.depth or 6
@@ -24,6 +26,7 @@ local function scenario(opts)
   if opts.existingStartup then files['startup.lua']='existing startup' end
   if opts.legacyStartup then files['startup.lua']='shell.run("quarry")' end
   if opts.legacyGuard then files['startup.lua']="if fs.exists('quarry-data/state.a') or fs.exists('quarry-data/state.b') then\n shell.run('quarry')\nend" end
+  if opts.resumeStartup then files['startup.lua']="if fs.exists('quarry-data/state.a') or fs.exists('quarry-data/state.b') then shell.run('mole', 'resume') end" end
   local originalStartup=files['startup.lua']
   local function clone(t) if type(t)~='table' then return t end local o={} for k,v in pairs(t) do o[k]=clone(v) end return o end
   textutils={serialize=function(t) seq=seq+1; objects[tostring(seq)]=clone(t); return tostring(seq) end,
@@ -166,7 +169,11 @@ local function scenario(opts)
       end} end
   end
   sleep=function() end
-  local function run(...) return assert(load(program,'mole'))(...) end
+  local function rawRun(...) return assert(load(program,'mole'))(...) end
+  local function run(...)
+    if select('#',...)==0 then return rawRun(checkpointState() and 'resume' or 'new') end
+    return rawRun(...)
+  end
   local c={width=width,length=length,depth=depth,fuelTarget=opts.fuelChest and (opts.fuelGoal or 2560) or opts.oldFuelDefault and 2000 or 100,fuelMargin=10,retries=12,veinLimit=128,veinDepth=24,
     fuelSchemaVersion=2,discardTrash=not opts.keepTrash,fuel={['minecraft:coal']=true,['minecraft:charcoal']=true,['minecraft:lava_bucket']=true},
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
@@ -178,9 +185,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.4%.10','9.0.0')
+    local source=program:gsub('1%.5%.0','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.4%.10','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.5%.0','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -197,7 +204,7 @@ local function scenario(opts)
     if opts.updateUnload then
       assert(not files['mole'] and files['mole.update-backup']==program,'Interrupted install lost backup')
       local booted=false
-      assert(load(files['startup.lua'],'startup','t',{fs=fs,shell={run=function(path) assert(path=='mole');booted=true end}}))()
+      assert(load(files['startup.lua'],'startup','t',{fs=fs,shell={run=function(path,command) assert(path=='mole' and command=='resume');booted=true end}}))()
       assert(booted and files['mole']==program,'Startup did not restore interrupted install')
     elseif opts.updateSame or opts.updateOlder or opts.updateBad or opts.updateSyntax or opts.updateOffline or opts.updateDisabled or opts.updateMoveFail or opts.updateWriteFail then
       assert(files['mole']==program,'Failed/unnecessary update changed executable')
@@ -320,7 +327,26 @@ local function scenario(opts)
     assert(world['2,6,0']=='minecraft:bedrock','Mined protected original return blockage')
     return
   end
+  if opts.commandFlow then
+    rawRun();assert(actions==0 and prompts==0 and not checkpointState(),'Plain mole started a quarry')
+    assert(files['mole-install-data'],'First launch did not initialize installation')
+    if opts.existingStartup then assert(files['startup.lua']=='existing startup','Installation overwrote custom startup')
+    else assert(files['startup.lua']:find('shell.run(program, "resume")',1,true),'Startup does not resume') end
+    local previous=prompts;rawRun('resume');assert(prompts==previous and not checkpointState(),'Resume started a new job')
+    rawRun();assert(actions==0 and prompts==0,'Repeated plain mole started a job')
+  end
   if opts.deleteCorrupt then files['quarry-data/config']='damaged config' else run() end
+  if opts.commandFlow then
+    local before=actions;local beforePrompts=prompts;local beforeClears=clears
+    rawRun();rawRun('resume')
+    assert(actions==before and prompts==beforePrompts,'Finished job restarted without new')
+    assert(clears==beforeClears and clears==1,'Cleared useful output outside new setup')
+  end
+  if checkpointState() and checkpointState().pending then
+    local before=actions;local beforePrompts=prompts;local beforeClears=clears
+    rawRun();rawRun('new');assert(actions==before and prompts==beforePrompts and clears==beforeClears,'Plain mole or new acted on interrupted job')
+  end
+
   if opts.fuelChest then
     if opts.expectedPulls==0 then assert(not table.concat(messages,'\n'):find('Fuel after chest refueling:',1,true),'Reported refueling when no fuel was consumed') end
     assert(f==opts.expectedFuel,'Wrong fuel amount from chest sequence: '..f)
@@ -386,7 +412,7 @@ local function scenario(opts)
   if opts.crash or opts.crashAfter or opts.turnCrash then
     if opts.returnDuringRecovery then
       run('return'); assert(checkpointState().phase=='paused' and p.y==0,'Return request not honored during recovery')
-      assert(table.concat(messages,'\n'):find('Returned home and paused as requested. Run mole to resume.',1,true),'Requested pause sounds like an error')
+      assert(table.concat(messages,'\n'):find('Returned home and paused as requested. Run mole resume to resume.',1,true),'Requested pause sounds like an error')
       run()
     else run() end
   end
@@ -455,8 +481,8 @@ local function scenario(opts)
   if opts.chestCoal or opts.carriedCoal then assert(consumed==2 and coal+chestCoal==(opts.chestCoal or 0)+(opts.carriedCoal or 0)-2,'Incorrect smart refueling') end
   if opts.forceLeftCrash then assert(not crash,'Left-turn interruption was never exercised') end
   assert(dimensionPrompts==setupPrompts,'Resume asked setup questions again')
-  if opts.legacyStartup or opts.legacyGuard then
-    assert(files['startup.lua']:find('local program="mole"',1,true) and files['startup.lua']:find('shell.run(program)',1,true),'Old startup not updated to Mole')
+  if opts.legacyStartup or opts.legacyGuard or opts.resumeStartup then
+    assert(files['startup.lua']:find('local program="mole"',1,true) and files['startup.lua']:find('shell.run(program, "resume")',1,true),'Old startup not updated to Mole')
   end
   if opts.settings then
     inputs={'1','mod:ignore_me','2','minecraft:stone','4',''};run('settings')
@@ -482,7 +508,7 @@ scenario({crashAfter=true,at=45,recoveryMoveCrash=true,recoveryAfter=true});
 scenario({crashAfter=true,at=45,starve=true});
 scenario({inputs={'','','64',''}});
 scenario({inputs={'bad','0','3','3','','64','6',''}});
-scenario({inputs={'q'},cancel=true});scenario({slowProgress=true});
+scenario({inputs={'q'},cancel=true});scenario({slowProgress=true});scenario({commandFlow=true});scenario({commandFlow=true,existingStartup=true});scenario({resumeStartup=true});
 scenario({existingStartup=true});scenario({legacy=true});
 scenario({width=16,length=16,depth=6});
 scenario({width=1,length=1,depth=1});
