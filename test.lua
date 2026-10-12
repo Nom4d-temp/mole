@@ -187,7 +187,7 @@ local function scenario(opts)
     if select('#',...)==0 then return rawRun(checkpointState() and 'resume' or 'new') end
     return rawRun(...)
   end
-  local c={width=width,length=length,depth=depth,fuelTarget=opts.fuelChest and (opts.fuelGoal or 2560) or opts.oldFuelDefault and 2000 or 100,fuelMargin=10,retries=12,veinLimit=128,veinDepth=24,
+  local c={width=width,length=length,depth=depth,fuelTarget=opts.fuelChest and (opts.fuelGoal or 2560) or opts.oldFuelDefault and 2000 or 100,fuelMargin=10,retries=12,veinLimit=opts.collectionLimit or 128,veinDepth=opts.searchDepth or 24,
     fuelSchemaVersion=2,discardTrash=not opts.keepTrash,fuel={['minecraft:coal']=true,['minecraft:charcoal']=true,['minecraft:lava_bucket']=true},
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
   if opts.oldFuelSchema then c.fuelSchemaVersion=nil;c.fuel['minecraft:lava_bucket']=nil;if opts.disableLava then c.fuel['minecraft:lava_bucket']=false end end
@@ -257,9 +257,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.11','9.0.0')
+    local source=program:gsub('1%.6%.12','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.11','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.12','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -566,13 +566,15 @@ local function scenario(opts)
     end
     if opts.protectedScan then assert(world['0,1,1']=='minecraft:bedrock','Mined protected scan neighbor') end
     if opts.injectReturnFuel or opts.injectRecoveryFuel then assert(injected and consumed>0 and table.concat(messages,'\n'):find('Return fuel safety: used carried fuel',1,true),'Return did not consume carried fuel') end
-    if not opts.air and not opts.stoneOnly and width>=3 and length>=3 and s.shape.h>=6 then
+    if not opts.collectionLimit and not opts.searchDepth and not opts.air and not opts.stoneOnly and width>=3 and length>=3 and s.shape.h>=6 then
       assert((world['1,2,1']==nil or (opts.blockShortcut or opts.outboundObstacle) and world['1,2,1']=='minecraft:bedrock') and world['1,3,1']==nil and world['1,4,1']==nil,'Exposed ore vein remains')
       assert(world['1,6,0']=='mod:hidden_ore','Dug an unexposed isolated ore')
       assert(world['2,1,1']==(opts.fluid and 'mod:oil' or 'minecraft:stone'),'Dug a trash roof unnecessarily')
       local removed=0; for _ in pairs(dug) do removed=removed+1 end
       assert(removed<width*length*depth/2,'Excavated too much trash')
     end
+    if opts.collectionLimit then assert(table.concat(messages,'\n'):find('Collection limit reached:',1,true),'Collection limit reason missing') end
+    if opts.searchDepth then assert(table.concat(messages,'\n'):find('Search depth limit reached:',1,true),'Search depth reason missing') end
     if opts.vanillaOre then assert(table.concat(messages,'\n'):find('Vein collected: 3 blocks.',1,true),'Vanilla ore summary missing') end
     assert(not table.concat(messages,'\n'):find('Searching a deposit:',1,true),'Old verbose scanning message remains')
     if opts.slowProgress then assert(table.concat(messages,'\n'):find('Checking nearby blocks.',1,true),'Long deposit search did not report activity') end
@@ -647,6 +649,8 @@ check('Mining and navigation 2',{protected=true})
 check('Mining and navigation 3',{full=true})
 check('Mining and navigation 4',{slowProgress=true})
 check('Readable vanilla ore summary',{vanillaOre=true})
+check('Collection limit message',{collectionLimit=2})
+check('Search depth limit message',{searchDepth=1})
 check('Mining and navigation 5',{width=16,length=16,depth=6})
 check('Mining and navigation 6',{width=1,length=1,depth=1})
 check('Mining and navigation 7',{width=5,length=4,depth=4})

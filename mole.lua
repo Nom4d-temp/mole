@@ -1,6 +1,6 @@
--- Mole v1.6.11: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.12: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.11'
+local VERSION='1.6.12'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -250,8 +250,7 @@ function net.blocks(n) return n..' block'..(n==1 and '' or 's') end
 function net.mining(block)
   if not net.active or c.trash[block.name] or net.isOre(block.name) or net.lastBlock==block.name then return end
   net.lastBlock=block.name
-  log('Mining unfamiliar block:')
-  log(block.name)
+  log('Mining unfamiliar block: '..block.name)
   net.flush()
 end
 function net.discovery(block)
@@ -1233,7 +1232,8 @@ local function vein()
     local v=s.vein; local f=v.stack[#v.stack]
     local parent=v.stack[#v.stack-1]
     local returning=f.next>=6 or v.count>=c.veinLimit or #v.stack>c.veinDepth
-    if v.count>=c.veinLimit or #v.stack>c.veinDepth then v.limited=true end
+    if v.count>=c.veinLimit then v.limited='collection'
+    elseif #v.stack>c.veinDepth and v.limited~='collection' then v.limited='depth' end
     if not same(s.p,f.p) and not (returning and parent and same(s.p,parent.p)) then gotoWork(f.p) end
     if f.next>=6 or v.count>=c.veinLimit or #v.stack>c.veinDepth then
       local parent=v.stack[#v.stack-1]
@@ -1268,8 +1268,10 @@ local function vein()
   end
   local finished=s.vein
   if finished.count>0 then
-    local label=finished.limited and 'Collection limit reached: ' or finished.other==false and 'Vein collected: ' or 'Collected: '
-    log(label..net.blocks(finished.count)..'.')
+    local limit=finished.limited
+    if limit==true then limit=finished.count>=c.veinLimit and 'collection' or 'depth' end
+    local label=limit=='collection' and 'Collection limit reached: ' or limit=='depth' and 'Search depth limit reached: ' or finished.other==false and 'Vein collected: ' or 'Collected: '
+    log(label..net.blocks(finished.count)..(limit=='depth' and ' collected.' or '.'))
   end
   s.vein=nil; save(); return true
 end
