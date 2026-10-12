@@ -1,6 +1,6 @@
--- Mole v1.6.6: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.7: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.6'
+local VERSION='1.6.7'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -197,6 +197,7 @@ function net.record(...)
   if not net.active then return end
   local parts={...};for i,v in ipairs(parts) do parts[i]=tostring(v) end
   local line=table.concat(parts,' '):gsub('[%c]',' ')
+  if line:match('^%[Mole%] Tunnel progress:') or line:match('^%[Mole%] Mining tunnels at Y') then return end
   repeat net.enqueue('log',{text=line:sub(1,256)});line=line:sub(257) until #line==0
 end
 function net.status()
@@ -207,7 +208,6 @@ function net.status()
   local moving=net.running and net.inFlight and not s.recovery
   local uncertain=s.recovery~=nil or s.pending~=nil and not moving
   local p=s.p;local detail=s.service and s.service.reason or nil
-  if moving then detail=(detail and detail..'. ' or '')..'Moving; position is the last confirmed checkpoint.' end
   local y=s.startY-p.y
   if s.emergency then
     y=(s.emergency.targetY or s.startY)-s.emergency.p.y
@@ -216,7 +216,7 @@ function net.status()
   end
   net.send('status',{job=s.companionJob,phase=names[s.phase] or s.phase,y=y,depth=s.startY-y,
     right=p.x,forward=p.z,fuel=fuel()==math.huge and 'unlimited' or fuel(),uncertain=uncertain,moving=moving==true,detail=detail,
-    progress='Tunnel positions completed: '..math.max(0,s.index-1)})
+    progress='Tunnels: '..math.max(0,s.index-1)..(net.total and '/'..net.total or '')})
 end
 function net.flush()
   local queue=net.queue;net.queue={}
@@ -244,9 +244,11 @@ function net.handle(sender,msg,protocol)
   end
   net.pending={id=msg.request,received=net.clock()}
 end
+function net.isOre(id) return id:match('^minecraft:.*_ore$') or id=='minecraft:ancient_debris' end
+function net.blocks(n) return n..' block'..(n==1 and '' or 's') end
 function net.discovery(block)
   if not net.profile or not net.profile.enabled or not s or c.trash[block.name] then return end
-  local known=block.name:match('^minecraft:.*_ore$') or block.name=='minecraft:ancient_debris'
+  local known=net.isOre(block.name)
   if known then return end
   s.companionBlocks=s.companionBlocks or {}
   local old=s.companionBlocks[block.name]
@@ -1157,19 +1159,23 @@ for band=0,math.ceil(c.depth/3)-1 do
   previousDepth=y
 end
 local total=#plan
+net.total=total
 local progressInterval=math.max(8,math.min(64,math.ceil(total/20)))
 local lastProgressTime=os.clock()
 local lastVein;local lastVeinCount=0
+local lastReportedY
 local function reportProgress(deposit)
   local now=os.clock()
   if deposit then
     if lastVein~=s.vein then lastVein=s.vein;lastVeinCount=0 end
     if s.vein.count-lastVeinCount<16 and now-lastProgressTime<20 then return end
     lastVeinCount=s.vein.count
-    log('Searching a deposit: '..s.vein.count..' non-trash blocks followed; '..depthText(s.p)..'. No action needed.')
+    if s.vein.count==0 then log('Checking nearby blocks.')
+    else log((s.vein.other==false and 'Following a vein: ' or 'Collecting blocks: ')..net.blocks(s.vein.count)..' mined.') end
   else
     if (s.index-1)%progressInterval~=0 and now-lastProgressTime<20 then return end
-    log('Mining: tunnel positions completed '..(s.index-1)..'/'..total..'; '..depthText(s.p))
+    log('Tunnel progress: '..(s.index-1)..'/'..total..'.')
+    if lastReportedY~=s.p.y then log('Mining tunnels at Y '..(s.startY-s.p.y)..'.');lastReportedY=s.p.y end
   end
   lastProgressTime=now
 end
@@ -1214,6 +1220,7 @@ local function vein()
     local v=s.vein; local f=v.stack[#v.stack]
     local parent=v.stack[#v.stack-1]
     local returning=f.next>=6 or v.count>=c.veinLimit or #v.stack>c.veinDepth
+    if v.count>=c.veinLimit or #v.stack>c.veinDepth then v.limited=true end
     if not same(s.p,f.p) and not (returning and parent and same(s.p,parent.p)) then gotoWork(f.p) end
     if f.next>=6 or v.count>=c.veinLimit or #v.stack>c.veinDepth then
       local parent=v.stack[#v.stack-1]
@@ -1228,6 +1235,7 @@ local function vein()
         local ok,b=inspect()
         local per=d==4 and 'top' or d==5 and 'bottom' or 'front'
         if ok and not protectedBlock(b,per) and not passable[b.name] and not c.trash[b.name] then
+          if not net.isOre(b.name) then v.other=true elseif v.count==0 and v.other==nil then v.other=false end
           local traversed=step(q,'push'); s.seen[key(q)]=true
           if traversed then
             -- This was a fluid/passable block, not a deposit to follow.
@@ -1244,6 +1252,11 @@ local function vein()
     if freeSlots()<2 or fuel()<=reserve(#s.route+1)+3 then
       requestService(freeSlots()<2 and 'Inventory nearly full' or 'Fuel reserve reached',false); return false
     end
+  end
+  local finished=s.vein
+  if finished.count>0 then
+    local label=finished.limited and 'Collection limit reached: ' or finished.other==false and 'Vein collected: ' or 'Collected: '
+    log(label..net.blocks(finished.count)..'.')
   end
   s.vein=nil; save(); return true
 end
