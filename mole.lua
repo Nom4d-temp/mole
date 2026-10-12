@@ -1,6 +1,6 @@
--- Mole v1.5.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.5.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.3'
+local VERSION='1.5.4'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -185,7 +185,11 @@ if argv[1]=='update' then
   local function update()
     print('Installed Mole: '..VERSION..'. Checking GitHub...')
     if not http or not http.get then print('HTTP downloads are disabled; ask the server owner to enable them.'); return end
-    local response,why,failed=http.get(UPDATE_URL)
+    -- A branch URL may be cached after a recent release. Give each check a
+    -- fresh URL and ask intermediaries to revalidate their cached response.
+    local stamp=os.epoch and os.epoch('utc') or tostring(os.time())..'-'..math.floor(os.clock()*1000)
+    local response,why,failed=http.get(UPDATE_URL..'?mole_update='..stamp,
+      {['Cache-Control']='no-cache',['Pragma']='no-cache'})
     if not response then
       if failed then failed.close() end
       print('Update check failed: '..tostring(why)..'. Current program kept.'); return
