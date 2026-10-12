@@ -1,6 +1,6 @@
--- Mole v1.6.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.3'
+local VERSION='1.6.4'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -310,17 +310,17 @@ function net.menu(station,code)
     local current=net.readProfile()
     print('Mole companion (optional)')
     print(current and 'Paired station ID: '..current.station or 'Reporting: off')
-    print(current and '1 Pair / re-pair a station' or '1 Pair / enable a companion')
-    print('2 Disable wireless reporting')
+    print('1 Pair / re-pair a station')
+    print('2 Unpair')
     print('3 Check connection')
-    print('4 Unpair this turtle')
+    print('4 Disable reporting')
     print('Enter or q: finish')
     local choice=station and '1' or answer('Choose:'):lower()
     if choice=='' or choice=='q' then return end
-    if choice=='2' then
+    if choice=='4' then
       local profile=current or {};profile.enabled=false;writeFile(ROOT..'/companion',profile);net.active=false;net.profile=nil
       print('Wireless reporting disabled.');return
-    elseif choice=='4' then
+    elseif choice=='2' then
       if fs.exists(ROOT..'/companion') then fs.delete(ROOT..'/companion') end
       net.active=false;net.profile=nil;net.pending=nil;net.queue={}
       print('Turtle unpaired. Reporting is off.')

@@ -1,4 +1,4 @@
-# Mole 1.6.3
+# Mole 1.6.4
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -115,7 +115,7 @@ Mole works normally without a modem or companion. If you want to watch it from a
 
 Pairing stays open for five minutes. Use `companion pair` to connect turtles and `companion start` to open the status display. Plain `companion` shows its command overview. Until Mole runs, it shows **Paired - waiting for Mole to run** instead of implying a lost connection.
 
-You can also enter `mole pair <station ID> <code>` on the turtle as a shortcut to the same pairing flow. Choose **2** in `mole companion` to disable reporting, **3** to check the modem and send a connection check to the paired station, or **4** to unpair this turtle. Unpairing clears its saved station ID and token and turns reporting off; the quarry job and mining settings stay intact. Choose **1** to pair again. The former station may retain a last-known entry until you re-pair it.
+You can also enter `mole pair <station ID> <code>` on the turtle as a shortcut to the same pairing flow. Choose **4** in `mole companion` to disable reporting, **3** to check the modem and send a connection check to the paired station, or **2** to unpair this turtle. Unpairing clears its saved station ID and token and turns reporting off; the quarry job and mining settings stay intact. Choose **1** to pair again. The former station may retain a last-known entry until you re-pair it.
 
 When enabled, Mole reports tracked position, fuel, job state, recent messages, and unfamiliar blocks it successfully mines. Vanilla ores and configured trash are excluded from unfamiliar-block notices. Block IDs and counts appear on the companion; mining decisions stay the same.
 

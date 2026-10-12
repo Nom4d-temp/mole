@@ -255,9 +255,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.3','9.0.0')
+    local source=program:gsub('1%.6%.4','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.3','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.4','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -763,11 +763,11 @@ check('Wireless listener failure keeps mining',{network=true,networkReceiveThrow
 check('Modem detach keeps mining',{network=true,networkDetach=true})
 check('Disabled wireless never probes hardware',{networkDisabled=true})
 check('Companion menu missing modem',{companionMenu={'1','q'}})
-check('Companion menu disables reporting',{network=true,companionMenu={'2'}})
+check('Companion menu disables reporting',{network=true,companionMenu={'4'}})
 check('Companion connection check',{network=true,networkCheck=true,companionMenu={'3','q'}})
-check('Companion unpair removes credentials',{network=true,networkUnpair=true,companionMenu={'4'}})
-check('Companion unpair preserves saved quarry',{network=true,networkUnpair=true,unpairSaved=true,companionMenu={'4'}})
-check('Unpair without an existing pairing',{networkUnpair=true,companionMenu={'4'}})
+check('Companion unpair removes credentials',{network=true,networkUnpair=true,companionMenu={'2'}})
+check('Companion unpair preserves saved quarry',{network=true,networkUnpair=true,unpairSaved=true,companionMenu={'2'}})
+check('Unpair without an existing pairing',{networkUnpair=true,companionMenu={'2'}})
 check('Guided companion pairing',{network=true,pairMenu=true})
 check('Pairing retries invalid ID and code',{network=true,pairMenu=true,pairInvalid=true})
 check('Station pairing command',{network=true,pairMenu=true,pairAlias=true})
