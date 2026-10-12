@@ -1,6 +1,6 @@
--- Mole v1.4.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.3: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.2'
+local VERSION='1.4.3'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -116,6 +116,10 @@ end
 local function save()
   s.seq=s.seq+1; writeFile(SP..(s.seq%2==0 and '.a' or '.b'),s)
 end
+local function failure(code,message)
+  error(setmetatable({code=code,message=message},{__tostring=function(e) return e.message end}),0)
+end
+local function failureCode(why) return type(why)=='table' and why.code or nil end
 local function log(msg) print('[Mole] '..msg) end
 local function copy(v) return {x=v.x,y=v.y,z=v.z,d=v.d} end
 local function same(a,b) return a.x==b.x and a.y==b.y and a.z==b.z end
@@ -255,7 +259,7 @@ local function settingsMenu()
   end
 end
 if argv[1]=='help' then
-  print('Mole 1.3.0 - tunnel miner')
+  print('Mole '..VERSION..' - tunnel miner')
   print('mole            Start or resume')
   print('mole status   Show progress')
   print('mole settings Change the trash list')
@@ -276,7 +280,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.2 - first-time setup')
+  print('\nMole 1.4.3 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for each default, or q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -417,8 +421,8 @@ local function copyPath(path)
   local result={}; for i,p in ipairs(path) do result[i]=copy(p) end; return result
 end
 local function obstruction(why)
-  why=tostring(why)
-  return why:find('Known tunnel blocked:',1,true)==1 or why:find('Movement blocked at ',1,true)==1
+  local code=failureCode(why)
+  return code=='PATH_BLOCKED' or code=='MOVE_BLOCKED'
 end
 local function inside(p) return p.x>=0 and p.x<c.width and p.z>=0 and p.z<c.length and p.y>=1 and p.y<=c.depth end
 -- Persist intent before physical actions; unfinished actions trigger chest homing.
@@ -506,10 +510,10 @@ local function guardedDig(side)
   if b.name=='minecraft:water' or b.name=='minecraft:lava' then return true end
   if c.protected[b.name] or peripheral.isPresent(per)
     or b.name:find('shulker_box',1,true) or b.name:find('turtle',1,true) then
-    error('Protected block: '..b.name,0)
+    failure('PROTECTED_BLOCK','Protected block: '..b.name)
   end
-  if freeSlots()<2 then error('Inventory reserve reached',0) end
-  local ok,why=dig(); if not ok then error('Cannot dig '..b.name..': '..tostring(why),0) end
+  if freeSlots()<2 then failure('INVENTORY_FULL','Inventory reserve reached') end
+  local ok,why=dig(); if not ok then failure('DIG_BLOCKED','Cannot dig '..b.name..': '..tostring(why)) end
   return true
 end
 local function step(target, mode, clearedOnly)
@@ -521,23 +525,23 @@ local function step(target, mode, clearedOnly)
   assert(math.abs(target.x-s.p.x)+math.abs(target.y-s.p.y)+math.abs(target.z-s.p.z)==1,'Nonadjacent route')
   refuelTo(reserve(#s.route+1)+2)
   if (mode=='push' or mode=='out') and fuel()<=math.max(reserve(#s.route+1),ascentDistance(target.y)+c.emergencyFuelMargin+32) then
-    error('Fuel reserve reached',0)
+    failure('FUEL_RESERVE','Fuel reserve reached')
   end
   if mode=='pop' and #s.route>ascentDistance(s.p.y) and fuel()<=ascentDistance(s.p.y)+c.emergencyFuelMargin+8 then
-    error('Return would consume the emergency ascent reserve',0)
+    failure('RETURN_FUEL_LOW','Return would consume the emergency ascent reserve')
   end
   if mode=='pop' and fuel()<#s.route+c.fuelMargin then
-    error('Insufficient fuel for the remaining known return route; stopped safely.',0)
+    failure('INSUFFICIENT_RETURN_FUEL','Insufficient fuel for the remaining known return route; stopped safely.')
   end
-  if fuel()<1 then error('Out of fuel; stopped at '..key(s.p),0) end
+  if fuel()<1 then failure('NO_FUEL','Out of fuel; stopped at '..key(s.p)) end
   for _=1,c.retries do
     refuelTo(reserve(#s.route+1)+2)
     local inspect=side=='up' and turtle.inspectUp or side=='down' and turtle.inspectDown or turtle.inspect
     local exists,b=inspect()
     local per=side=='up' and 'top' or side=='down' and 'bottom' or 'front'
     if protectedBlock(exists and b or nil,per) then
-      if clearedOnly then error('Known tunnel blocked: '..key(target)..' (protected block or peripheral)',0) end
-      error('Protected block: '..(b and b.name or 'peripheral'),0)
+      if clearedOnly then failure('PATH_BLOCKED','Known tunnel blocked: '..key(target)..' (protected block or peripheral)') end
+      failure('PROTECTED_BLOCK','Protected block: '..(b and b.name or 'peripheral'))
     end
     local p=copy(target); p.d=s.p.d
     -- Unknown solids and modded fluids are distinguished by a real, journaled
@@ -549,13 +553,13 @@ local function step(target, mode, clearedOnly)
     end
     if not (exists and passable[b.name]) then
       if clearedOnly then
-        if exists then error('Known tunnel blocked: '..key(target)..' ('..b.name..')',0) end
+        if exists then failure('PATH_BLOCKED','Known tunnel blocked: '..key(target)..' ('..b.name..')') end
       else guardedDig(side) end
       if action(move,p,mode) then return false end
     end
     sleep(0.2) -- Wait for falling gravel or an entity; do not attack mobs.
   end
-  error('Movement blocked at '..key(target),0)
+  failure('MOVE_BLOCKED','Movement blocked at '..key(target))
 end
 local function knownStep(target,mode)
   local ok,why=pcall(step,target,mode,true)
@@ -601,13 +605,12 @@ local function escapePath()
 end
 local function excavateHome()
   local path=escapePath()
-  if not path or #path==0 then error('Unable to find a return detour within the area and remaining fuel.',0) end
+  if not path or #path==0 then failure('NO_HOME_ROUTE','Unable to find a return detour within the area and remaining fuel.') end
   local q=path[1]
   local ok,why=pcall(step,q,'push',false)
   if not ok then
     local message=tostring(why)
-    if s.pending or not (obstruction(why) or message:find('Protected block:',1,true)==1
-      or message:find('Cannot dig ',1,true)==1) then error(why,0) end
+    if s.pending or not (obstruction(why) or failureCode(why)=='PROTECTED_BLOCK' or failureCode(why)=='DIG_BLOCKED') then error(why,0) end
     s.blocked[key(q)]=true; save()
     log('Return detour blocked; trying another approach.')
   end
@@ -629,8 +632,7 @@ local function homeStep()
       local reopened,err=pcall(step,target,'pop',false)
       if reopened then return end
       local message=tostring(err)
-      if s.pending or not (obstruction(err) or message:find('Protected block:',1,true)==1
-        or message:find('Cannot dig ',1,true)==1) then error(err,0) end
+      if s.pending or not (obstruction(err) or failureCode(err)=='PROTECTED_BLOCK' or failureCode(err)=='DIG_BLOCKED') then error(err,0) end
       s.service.excavating=true; save()
       log('No clear recorded route; excavating a detour toward home.')
       excavateHome(); return
@@ -643,7 +645,7 @@ local function gotoWork(p)
   if s.tunnels[key(p)] then
     while not same(s.p,p) do
       local path=knownPath(s.p,p)
-      if not path then error('No clear known route to the saved work position.',0) end
+      if not path then failure('NO_ROUTE','No clear known route to the saved work position.') end
       for _,q in ipairs(path) do if not knownStep(q,'push') then break end end
     end
     return
@@ -657,24 +659,56 @@ local function gotoWork(p)
 end
 local function chest()
   face(2)
-  assert(peripheral.hasType('front','inventory'),'Output chest missing or unsupported; replace it behind origin.')
+  if not peripheral.hasType('front','inventory') then failure('MISSING_CHEST','Output chest missing or unsupported; replace it behind origin.') end
   if not s.anchor then
     s.anchor={type=peripheral.getType('front'),size=peripheral.wrap('front').size()}; save()
+  end
+end
+local function organizeFuel(inv)
+  local contents=inv.list();local prefix=0
+  for i=1,inv.size() do if not contents[i] or not c.fuel[contents[i].name] then break end;prefix=i end
+  local zone=math.min(inv.size(),math.max(s.fuelZone or 0,prefix))
+  if s.fuelZone~=zone then s.fuelZone=zone;save() end
+  if zone==0 or type(inv.pushItems)~='function' then return end
+  for target=1,zone do
+    contents=inv.list();local source
+    for i=target,zone do if contents[i] and c.fuel[contents[i].name] then source=i;break end end
+    if not source then break end
+    if source~=target then
+      if contents[target] then
+        local empty
+        for i=inv.size(),1,-1 do if i~=target and not contents[i] then empty=i;break end end
+        if not empty then failure('CHEST_FULL','Chest needs an empty slot to organize fuel. Make room and run mole.') end
+        local moved=inv.pushItems('front',target,contents[target].count,empty)
+        if moved~=contents[target].count then failure('CHEST_CHANGED','Chest changed while moving output away from fuel; retry.') end
+      end
+      local item=inv.list()[source]
+      if not item or not c.fuel[item.name] then failure('CHEST_CHANGED','Chest fuel changed during organization; retry.') end
+      local moved=inv.pushItems('front',source,item.count,target)
+      if moved~=item.count then failure('CHEST_CHANGED','Could not organize the chest fuel; retry.') end
+    end
   end
 end
 local function unload()
   chest()
   trash()
-  for i=1,16 do
-    turtle.select(i)
-    if turtle.getItemCount(i)>0 and not turtle.drop() then error('Output chest full; empty it and run mole.',0) end
-    if turtle.getItemCount(i)>0 then error('Output chest full; empty it and run mole.',0) end
+  -- Return fuel first, so cargo cannot occupy the first available fuel slots.
+  for pass=1,2 do
+    for i=1,16 do
+      local item=turtle.getItemDetail(i)
+      if item and ((pass==1 and c.fuel[item.name]) or (pass==2 and not c.fuel[item.name])) then
+        turtle.select(i)
+        if turtle.getItemCount(i)>0 and not turtle.drop() then failure('CHEST_FULL','Output chest full; empty it and run mole.') end
+        if turtle.getItemCount(i)>0 then failure('CHEST_FULL','Output chest full; empty it and run mole.') end
+      end
+    end
   end
   turtle.select(1)
 end
 local function fuelText() return fuel()==math.huge and 'unlimited' or tostring(fuel())..' fuel units' end
-local function chestFuel(target)
+local function chestFuel(target,minimum)
   chest(); local inv=peripheral.wrap('front')
+  organizeFuel(inv)
   refuelTo(target)
   local sequence={}; local contents=inv.list()
   for i=1,inv.size() do
@@ -709,8 +743,10 @@ local function chestFuel(target)
   end
   log('Fuel after chest refueling: '..fuelText()..' (target: '..target..').')
   unload()
-  if problem then error(problem,0) end
-  if fuel()<target then error('Need more fuel. Put coal, charcoal, or lava buckets in consecutive chest slots starting at slot 1. The first empty or non-fuel slot ends refueling; then run mole.',0) end
+  organizeFuel(inv)
+  if problem then failure('CHEST_CHANGED',problem) end
+  if fuel()<minimum then failure('NEED_FUEL','Need more fuel for a safe departure: '..minimum..' units required. Refill the front fuel area and run mole.') end
+  if fuel()<target then log('Preferred fuel target not reached; safe minimum '..minimum..' is met, so mining can continue.') end
 end
 local function requestService(reason, pause)
   local trail=#s.route
@@ -730,7 +766,9 @@ local function service()
     log('At starting chest: '..s.service.reason..'. Fuel: '..fuelText()..'.')
     log(c.discardTrash and 'Unloading: trash goes below the turtle; kept items go into the chest.'
       or 'Unloading all items into the chest (trash dropping is off).')
+    chest();organizeFuel(peripheral.wrap('front'))
     unload()
+    organizeFuel(peripheral.wrap('front'))
     if s.service.reason=='Quarry complete' then
       s.phase='done'; save(); log('Complete; inventory unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); return false
     end
@@ -753,7 +791,8 @@ local function service()
     else
       log('Taking fuel from consecutive chest slots until the target is reached. Whole items may take fuel above the target.')
     end
-    chestFuel(fuelTarget)
+    log('Minimum fuel for safe departure: '..needed..' units.')
+    chestFuel(fuelTarget,needed)
     s.phase='out'; save()
   end
   if s.phase=='out' then
@@ -849,7 +888,8 @@ local function vein()
         if d==4 then inspect=turtle.inspectUp elseif d==5 then inspect=turtle.inspectDown
         else face(d); inspect=turtle.inspect end
         local ok,b=inspect()
-        if ok and not passable[b.name] and not c.trash[b.name] then
+        local per=d==4 and 'top' or d==5 and 'bottom' or 'front'
+        if ok and not protectedBlock(b,per) and not passable[b.name] and not c.trash[b.name] then
           local traversed=step(q,'push'); s.seen[key(q)]=true
           if traversed then
             -- This was a fluid/passable block, not a deposit to follow.
@@ -992,8 +1032,7 @@ local function homeRecovery()
   for _,h in ipairs(r.hypotheses) do budget=budget+#h.route; shortest=math.min(shortest,#h.route) end
   if #r.hypotheses>0 then budget=2*budget-shortest end
   refuelTo(budget+c.fuelMargin)
-  assert(fuel()>=budget+c.fuelMargin,
-    'Insufficient fuel for chest recovery; waiting with saved hypotheses. Add allowed fuel and run mole.')
+  if fuel()<budget+c.fuelMargin then failure('RETURN_RECOVERY_FUEL','Insufficient fuel for chest recovery; saved hypotheses retained.') end
   while #r.hypotheses>0 do
     local h=r.hypotheses[1]; local reachable=true
     log('Recovery trial: '..#h.route..' steps to the predicted origin.')
@@ -1019,9 +1058,9 @@ local function homeRecovery()
         local climb=ascentDistance(deepest)
         refuelTo(math.max(#h.route+c.fuelMargin,climb+c.emergencyFuelMargin+9))
         if #h.route>climb and fuel()<=climb+c.emergencyFuelMargin+8 then
-          error('Recovery would consume the emergency ascent reserve',0)
+          failure('RETURN_FUEL_LOW','Recovery would consume the emergency ascent reserve')
         end
-        assert(fuel()>c.fuelMargin,'Recovery fuel margin reached; stopped safely.')
+        if fuel()<=c.fuelMargin then failure('RECOVERY_FUEL_LOW','Recovery fuel margin reached; stopped safely.') end
         if recoveryAction(op) then
           if exists then passable[b.name]=true end
           moved=true; break
@@ -1047,7 +1086,7 @@ local function homeRecovery()
     r.failed=r.failed or {}; r.failed[#r.failed+1]=table.remove(r.hypotheses,1); save()
   end
   r.hypotheses=r.failed or {}; r.failed=nil; save()
-  error('Starting chest not found on any cleared route. Check chest/chunk loading or route obstruction; run mole to retry. No blocks were dug.',0)
+  failure('NO_CHEST_CONFIRMATION','Starting chest not found on any cleared route. No blocks were dug during normal recovery.')
 end
 
 -- Last-resort escape uses its own relative coordinates and action journal.
@@ -1210,15 +1249,10 @@ local function emergencyAscent()
   if e.heightUncertainty>0 then log('Height was uncertain; the turtle may finish '..e.heightUncertainty..' block(s) above the target.') end
   log('This is a retrieval point, not confirmation of open sky. Use mole reset only after positioning the turtle for a new job.')
 end
-local function fallbackReason(why)
-  local text=tostring(why)
-  for _,message in ipairs({'No clear known route','Unable to find a return detour','Insufficient fuel for the remaining known return route',
-    'Return would consume the emergency ascent reserve','Recovery would consume the emergency ascent reserve','Starting chest not found','Insufficient fuel for chest recovery',
-    'Recovery fuel margin reached','Output chest missing','Inventory reserve reached','Fuel reserve reached','Out of fuel'}) do
-    if text:find(message,1,true) then return true end
-  end
-  return false
-end
+local emergencyFailures={NO_ROUTE=true,NO_HOME_ROUTE=true,INSUFFICIENT_RETURN_FUEL=true,
+  RETURN_FUEL_LOW=true,NO_CHEST_CONFIRMATION=true,RETURN_RECOVERY_FUEL=true,RECOVERY_FUEL_LOW=true,
+  MISSING_CHEST=true,INVENTORY_FULL=true,FUEL_RESERVE=true,NO_FUEL=true}
+local function fallbackReason(why) return emergencyFailures[failureCode(why)]==true end
 local function attemptEmergency(why)
   local ok,err=pcall(function() if s.phase~='emergency' then startEmergency(tostring(why)) end;emergencyAscent() end)
   if not ok then log('Emergency escape saved: '..tostring(err)..'. Run mole to retry.') end
@@ -1297,7 +1331,7 @@ if not ok then
   end
   -- An error during a return must not overwrite the original outbound route.
   if s.phase=='work' then
-    requestService(tostring(err),err~='Fuel reserve reached' and err~='Inventory reserve reached')
+    requestService(tostring(err),failureCode(err)~='FUEL_RESERVE' and failureCode(err)~='INVENTORY_FULL')
     local safe,why=pcall(service)
     if not safe then
       if fallbackReason(why) then attemptEmergency(why)

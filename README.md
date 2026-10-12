@@ -1,4 +1,4 @@
-# Mole 1.4.2
+# Mole 1.4.3
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -28,7 +28,7 @@ This downloads Mole and saves it on your turtle as **mole**.
 1. Choose an area you are happy for the turtle to mine underneath.
 2. Put the turtle at the **near-left corner**, facing into the area.
 3. Put the chest **directly behind the turtle**, at the same height.
-4. Put fuel in **consecutive chest slots starting at slot 1**. Coal, charcoal, and lava buckets can be mixed. The first empty slot or non-fuel item ends the fuel sequence. Leave room for the items it brings back.
+4. Put fuel in **consecutive chest slots starting at slot 1**. Coal, charcoal, and lava buckets can be mixed. The first empty slot or non-fuel item marks the end of the initial fuel area. Mole remembers and maintains that area during the job. Leave room for the items it brings back.
 
 **Length goes forward. Width goes to the turtle's right. Depth goes down from its starting block.** The column directly below the turtle is included in the mining area.
 
@@ -71,9 +71,9 @@ If you already use your own startup program, the miner keeps it. To make that ex
 
 Mole digs one-block-high tunnels, leaving two columns between them and three blocks between tunnel levels. It checks neighboring blocks and follows connected ores and other non-trash blocks within your chosen area. Ordinary stone is mined only when needed for movement. Some hidden ores and very large veins may be missed.
 
-It returns to the chest when inventory is full or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are left alone; keep the quarry and its one-block emergency border clear of builds.
+It returns to the chest when inventory is full or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are skipped during ore searches; merely spotting one does not stop the quarry. Blocks that obstruct required movement still use normal obstacle handling. Keep the quarry and its one-block emergency border clear of builds.
 
-At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. **The default target is 2,560 units—32 coal or charcoal from empty. Mole raises its fuel target when the route back to work requires a larger fuel reserve.** Finished jobs do not refuel.
+At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. **The preferred target is 2,560 units—32 coal or charcoal from empty. Mole raises it when the route back to work requires a larger fuel reserve.** If the chest cannot reach that target but the calculated safe departure minimum is met, mining continues. Mole reports both values. For fuel shortages, it waits at home only when the minimum is not met. Finished jobs do not refuel.
 
 ## Everyday controls
 
@@ -113,9 +113,11 @@ After reaching the target, Mole stays paused for retrieval and never automatical
 
 ## Refueling with lava buckets
 
-Lava buckets are accepted alongside coal and charcoal. Mole reads the fuel sequence from chest slot 1 onward and stops at the first empty or non-fuel slot. It consumes only enough fuel to reach its target; it does not automatically use every bucket it finds.
+Lava buckets are accepted alongside coal and charcoal. On the first chest visit, Mole records the consecutive fuel slots starting at slot 1; the first empty or non-fuel slot ends that initial area. During later visits, it keeps remaining fuel together at the front of that area, moving returned buckets and output out of its way. It consumes only enough to reach its preferred target.
 
-Empty buckets stay in the turtle until that refueling pass finishes, then are returned to the chest with unused fuel. Before the next refueling visit, remove returned empty buckets from the front slots and refill any gaps: an empty bucket counts as a non-fuel item. If chest contents change during refueling, Mole stops and reports the problem. It needs spare chest space to return buckets and unload its haul.
+Empty buckets stay onboard until the refueling pass finishes, then return to the chest. With a supported chest, Mole reorganizes the remaining fuel automatically, so returned buckets and used-up slots do not require routine manual tidying. Leave an empty chest slot for rearrangement and enough room for the haul. Inventories without rearrangement support retain the simple fuel-prefix behavior and may need manual tidying. On the first visit after upgrading an older job, arrange fuel at the front once to establish the managed area.
+
+If the preferred target cannot be reached, Mole can continue when its safe minimum is satisfied. Chest changes or extraction mismatches still stop refueling rather than being treated as a harmless fuel shortage.
 
 Existing configurations gain lava-bucket support once; an explicitly disabled lava-bucket entry is preserved. You can edit allowed fuels in the config file. Mole does not collect lava from the world or refill buckets itself.
 
@@ -178,6 +180,7 @@ The file contains the trash list, allowed fuel items, protected blocks, fuel tar
 ## AI disclosure
 
 Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
+
 
 
 
