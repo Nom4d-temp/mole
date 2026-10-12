@@ -35,7 +35,13 @@ local function scenario(opts)
   if opts.resumeStartup then files['startup.lua']="if fs.exists('quarry-data/state.a') or fs.exists('quarry-data/state.b') then shell.run('mole', 'resume') end" end
   local originalStartup=files['startup.lua']
   local function clone(t) if type(t)~='table' then return t end local o={} for k,v in pairs(t) do o[k]=clone(v) end return o end
-  textutils={serialize=function(t) seq=seq+1; objects[tostring(seq)]=clone(t); return tostring(seq) end,
+  local function serializable(value,seen)
+    if type(value)~='table' then return end
+    assert(not seen[value],'Cannot serialize table with repeated entries')
+    seen[value]=true
+    for k,v in pairs(value) do serializable(k,seen);serializable(v,seen) end
+  end
+  textutils={serialize=function(t) serializable(debug.getinfo(2,'S').source=='mole' and t or clone(t),{});seq=seq+1; objects[tostring(seq)]=clone(t); return tostring(seq) end,
     unserialize=function(t) return clone(objects[t]) end}
   local updateFailed=false
   fs={makeDir=function() end,move=function(from,to)
@@ -249,9 +255,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.1','9.0.0')
+    local source=program:gsub('1%.6%.2','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.1','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.2','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false

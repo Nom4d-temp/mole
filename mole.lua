@@ -1,6 +1,6 @@
--- Mole v1.6.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.1'
+local VERSION='1.6.2'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -1036,7 +1036,8 @@ function net.acceptReturn()
   local pending=net.pending;net.pending=nil;if not pending then return end
   local r={id=pending.id,result='accepted'}
   s.companionRequests=s.companionRequests or {}
-  s.companionRequests[#s.companionRequests+1]=r
+  -- CC:Tweaked rejects repeated table references in saved data.
+  s.companionRequests[#s.companionRequests+1]={id=r.id,result=r.result}
   if #s.companionRequests>16 then table.remove(s.companionRequests,1) end
   s.companionReturn=r
   if s.phase=='work' or s.phase=='out' then
@@ -1045,7 +1046,10 @@ function net.acceptReturn()
     if destination then s.service.path=destination;s.service.target=copy(destination[#destination] or origin);save() end
   elseif s.service then
     s.service.pause=true;s.service.reason='User requested return';save()
-  else r.result='rejected';r.detail='Cannot return in this state.';save() end
+  else
+    r.result='rejected';r.detail='Cannot return in this state.'
+    local receipt=s.companionRequests[#s.companionRequests];receipt.result=r.result;receipt.detail=r.detail;save()
+  end
   net.receipt(r.id,r.result,r.detail)
 end
 local function service()
@@ -1628,8 +1632,7 @@ local ok,err=pcall(function()
   end
 end)
 if not ok and failureCode(err)=='REMOTE_RETURN' then
-  net.acceptReturn()
-  ok,err=pcall(service)
+  ok,err=pcall(function() net.acceptReturn();return service() end)
 end
 if not ok then
   log(tostring(err))
