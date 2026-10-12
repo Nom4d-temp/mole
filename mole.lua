@@ -1,6 +1,6 @@
--- Mole v1.5.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.5.2: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.1'
+local VERSION='1.5.2'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -277,7 +277,7 @@ local function usage(full)
     print('mole reset     Clear job/settings')
     print('mole delete    Uninstall Mole')
   else print('mole help    All commands') end
-  print('Ctrl+T: stop; mole resume: continue')
+  print(full and 'Ctrl+T: stop' or 'Ctrl+T: stop; mole resume: continue')
 
 end
 if not argv[1] then
@@ -301,15 +301,14 @@ if fresh then
     print('Finish the job or return home before starting a new one.'); return
   end
   if term and term.clear and term.setCursorPos then term.clear();term.setCursorPos(1,1) end
-  print('Mole '..VERSION..' - new quarry')
-  print('We dig tunnels and collect nearby ores.')
-  print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
+  print('Setting up new quarry')
+  print('Enter: dimension defaults. q: cancel.')
   print('Length goes forward; width goes to the right.')
   local length=numberQuestion('Length in blocks',c.length,64); if not length then return end
   local width=numberQuestion('Width in blocks',c.width,64); if not width then return end
   local startY
   while true do
-    local raw=answer('Starting world Y coordinate (required):')
+    local raw=answer('Current turtle Y coordinate (required):')
     if raw:lower()=='q' then return end
     local n=tonumber(raw)
     if n and n==n and n~=math.huge and n~=-math.huge and n%1==0 then startY=n; break end

@@ -1,4 +1,4 @@
-# Mole 1.5.1
+# Mole 1.5.2
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -49,7 +49,7 @@ The turtle asks:
 ```text
 Length in blocks [16]:
 Width in blocks [16]:
-Starting world Y coordinate (required):
+Current turtle Y coordinate (required):
 Depth below the turtle [64]:
 ```
 
