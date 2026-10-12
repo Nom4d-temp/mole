@@ -2,9 +2,9 @@
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
-**A little mining robot that digs tunnels, finds nearby ores, and brings them back to your chest.**
+**Meet Mole: your turtle’s next mining adventure.** Mole turns a CC: Tweaked mining turtle into a tunnel miner that searches for nearby ores while leaving ordinary stone in place wherever possible. Answer a few setup questions, give it a chest and some fuel, and let it get to work.
 
-Run `mole`, answer three questions, and your turtle gets to work.
+Mole follows connected ore veins, brings its haul back to your chest, and manages refueling and trash disposal. Saved progress and automatic recovery help it pick up after interruptions, while simple commands let you change settings, start a new quarry, or update straight from GitHub. It works with normal and advanced mining turtles, with unfamiliar modded blocks kept by default.
 
 ## What you need
 
@@ -156,10 +156,6 @@ Run `mole` once. Future updates can use `mole update`. Updates become available 
 Mole stores its settings in `quarry-data/config` on the turtle. Most users can use the setup questions and `mole settings`. For advanced changes, stop Mole with Ctrl+T, then type `edit quarry-data/config`.
 
 The file contains the trash list, allowed fuel items, protected blocks, fuel target and reserves, movement retries, and ore-vein search limits. Make a backup before editing, keep the existing format, and save before running `mole` again. Changing dimensions in this file does not resize a saved job; use `mole new` for a different size. `mole reset` restores all default settings and clears the saved job.
-
-## Testing
-
-Mole has passed offline mock tests for setup, tunnel mining, ore veins, returning home, and recovery. Start your Minecraft test with **3 × 3 × 6**.
 
 ## AI disclosure
 
