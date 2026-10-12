@@ -30,6 +30,8 @@ This downloads Mole and saves it on your turtle as **mole**.
 3. Put the chest **directly behind the turtle**, at the same height.
 4. Put fuel in **consecutive chest slots starting at slot 1**. Coal, charcoal, and lava buckets can be mixed. The first empty slot or non-fuel item marks the end of the initial fuel area. Mole remembers and maintains that area during the job. Leave room for the items it brings back.
 
+**Using lava buckets:** Mole returns empty buckets to the chest after refueling and keeps remaining fuel together at the front when the chest supports rearranging items. Leave an empty chest slot for this and room for the haul. Other inventories may need manual tidying. Mole does not collect lava or refill buckets.
+
 **Length goes forward. Width goes to the turtle's right. Depth goes down from its starting block.** The column directly below the turtle is included in the mining area.
 
 Keep the starting chest in place. Keep other matching chests away from the mining area: the turtle uses this chest to find its way home after an interrupted move.
@@ -51,21 +53,19 @@ Starting world Y coordinate [Enter = unknown]:
 Depth below the turtle [64]:
 ```
 
-Press **Enter** to use the number in brackets, or type a different whole number. Type `q` to cancel setup.
+Press **Enter** to use the default, or enter a whole number. Type `q` to cancel setup.
 
-For your first test, choose **3** for length, **3** for width, leave starting Y blank (or enter its actual value), and choose **6** for depth. Check that the chest is behind the turtle, then press Enter at the final prompt to start.
+For a first test, use **3** for length, **3** for width, and **6** for depth. Enter the starting Y if you know it, or leave it blank. Check that the chest is behind the turtle, then press Enter at the final prompt to begin.
 
-The optional Y coordinate is the turtle's world height. Enter the Y of the turtle's own block, not the block underneath it. Negative numbers are accepted. Leave it blank if you do not know it; Mole then reports depth below the start and does not apply world-height guidance.
+**Starting Y** is the world height of the turtle's own block, not the block underneath. Leave it blank to use depth below the start.
 
-When Y is known, Mole displays how many blocks below the turtle reach **Y -62**, then asks for depth. It reduces the default depth if needed. The bedrock caution appears only if you request a bottom below Y -62. If your chosen depth goes deeper, press Enter to shorten it to Y -62, or type `yes` to keep the deeper depth. This override is useful in other dimensions. If the turtle starts at or below Y -62, you must explicitly choose `yes` to mine downward. The requested depth still has the normal 512-block maximum.
+When Y is known, Mole shows the depth needed to reach **Y -62** and lowers the default depth if necessary. If you request a deeper quarry, it warns you: press Enter to stop at Y -62, or type `yes` to keep your chosen depth, useful in other dimensions. Starting at or below Y -62 also requires `yes` to mine downward. Maximum depth is **512 blocks**.
 
-Progress and `mole status` show both world Y and blocks below the start when Y is known. For example, a start at Y 64 and a depth of 126 ends at Y -62. Entered Y is used for guidance and reporting; it does not locate the turtle or replace recovery. Existing jobs keep their current dimensions; the optional question is asked only for a new job. Emergency return detours can still move within the saved job area.
+Progress and `mole status` show world Y and depth when starting Y is known. Starting Y does not locate the turtle. Setup questions appear only for new jobs.
 
-If starting Y is known, Mole also asks for an optional **emergency target Y**. Leave it blank to use the starting elevation, or enter a higher Y for a known retrieval level in your dimension. This does not detect open sky, and a starting elevation can still be underground.
+With a starting Y, you can also choose an **emergency target Y**. Leave it blank for the starting elevation, or enter a higher retrieval level. Reaching that height does not guarantee reaching the surface.
 
-Mole saves its starting position and creates an automatic restart file. Your settings and progress are saved for the next time it runs.
-
-If you already use your own startup program, the miner keeps it. To make that existing program resume mining, add `shell.run("mole")` to it.
+Mole saves settings and progress and creates an automatic restart file. If you already have your own startup program, Mole keeps it; add `shell.run("mole")` to that file to enable automatic resuming.
 
 ## What will it dig?
 
@@ -115,16 +115,6 @@ If your modpack offers chunk-loading blocks or a tool such as **FTB Chunks**, we
 - **Emergency escape:** If returning home or finding the chest fails, Mole tries to climb to its starting elevation or your chosen emergency target, with sideways detours around obstacles. If a full inventory blocks escape, it may discard listed trash while keeping fuel and valuables. At the target, it stays paused for retrieval; use `mole status` to check its progress.
 
 Emergency escape cannot guarantee reaching the surface or getting past every obstacle. If fuel, space, or a safe route runs out, Mole saves its progress and waits for help.
-
-## Refueling with lava buckets
-
-Lava buckets are accepted alongside coal and charcoal. On the first chest visit, Mole records the consecutive fuel slots starting at slot 1; the first empty or non-fuel slot ends that initial area. During later visits, it keeps remaining fuel together at the front of that area, moving returned buckets and output out of its way. It consumes only enough to reach its preferred target.
-
-Empty buckets stay onboard until the refueling pass finishes, then return to the chest. With a supported chest, Mole reorganizes the remaining fuel automatically, so returned buckets and used-up slots do not require routine manual tidying. Leave an empty chest slot for rearrangement and enough room for the haul. Inventories without rearrangement support retain the simple fuel-prefix behavior and may need manual tidying. On the first visit after upgrading an older job, arrange fuel at the front once to establish the managed area.
-
-If the preferred target cannot be reached, Mole can continue when its safe minimum is satisfied. Chest changes or extraction mismatches still stop refueling rather than being treated as a harmless fuel shortage.
-
-Existing configurations gain lava-bucket support once; an explicitly disabled lava-bucket entry is preserved. You can edit allowed fuels in the config file. Mole does not collect lava from the world or refill buckets itself.
 
 ## Change the trash list
 
