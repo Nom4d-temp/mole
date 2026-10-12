@@ -71,7 +71,7 @@ Mole digs one-block-high tunnels, leaving two columns between them and three blo
 
 It returns to the chest when inventory is full or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are left alone; keep the quarry and its one-block emergency border clear of builds.
 
-At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. The default target is **2,560 units**—32 coal or charcoal from empty—and increases for longer routes. Finished jobs do not refuel.
+At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. **The default target is 2,560 units—32 coal or charcoal from empty. Mole raises its fuel target when the route back to work requires a larger fuel reserve.** Finished jobs do not refuel.
 
 ## Everyday controls
 
