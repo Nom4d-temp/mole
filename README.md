@@ -1,4 +1,4 @@
-# Mole 1.6.5
+# Mole 1.6.6
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -71,7 +71,7 @@ Mole saves settings and progress. Its automatic restart file uses `mole resume`,
 
 Mole digs one-block-high tunnels, leaving two columns between them and three blocks between tunnel levels. It checks neighboring blocks and follows connected ores and other non-trash blocks within your chosen area. Ordinary stone is mined only when needed for movement. Some hidden ores and very large veins may be missed.
 
-It returns to the chest when inventory is full or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are skipped during ore searches; merely spotting one does not stop the quarry. Blocks that obstruct required movement still use normal obstacle handling. Keep the quarry and its one-block emergency border clear of builds.
+It returns to the chest when inventory is full or fuel runs low, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are skipped during ore searches; merely spotting one does not stop the quarry. Blocks that obstruct required movement still use normal obstacle handling. Keep the quarry and its one-block emergency border clear of builds.
 
 At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. **The preferred target is 2,560 units—32 coal or charcoal from empty. Mole raises it when the route back to work requires a larger fuel reserve.** If the chest cannot reach that target but the calculated safe departure minimum is met, mining continues. Mole reports both values. For fuel shortages, it waits at home only when the minimum is not met. Finished jobs do not refuel.
 

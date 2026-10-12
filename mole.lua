@@ -1,6 +1,6 @@
--- Mole v1.6.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.6: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.5'
+local VERSION='1.6.6'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -1173,6 +1173,13 @@ local function reportProgress(deposit)
   end
   lastProgressTime=now
 end
+local function finishLevelTransition()
+  local trail=knownPath(origin,s.p)
+  if trail then s.route=trail;save() end
+  gotoWork(s.levelTransition)
+  s.route=knownPath(origin,s.p) or s.route
+  s.levelTransition=nil;save()
+end
 local function cell(i) return plan[i] end
 -- Old excavation checkpoints used a different cell numbering scheme.
 -- Remember their vertical band; convert only after reaching the chest.
@@ -1632,15 +1639,18 @@ local ok,err=pcall(function()
       requestService(freeSlots()<2 and 'Inventory nearly full' or 'Fuel reserve reached',false)
     else
       if not s.vein then
+        if s.levelTransition then finishLevelTransition() end
         local p=cell(s.index); gotoWork(p)
       end
       if vein() then
         s.index=s.index+1; save()
         reportProgress(false)
         if s.index<=total and plan[s.index].band~=plan[s.index-1].band then
-          log('Tunnel level finished. Returning to the chest.')
-          -- Reset to origin each band: shorter, predictable return paths.
-          requestService('Band complete',false); s.service.reset=true; save()
+          log('Tunnel level finished. Continuing to the next level.')
+          -- Save the transition so refueling or a reload still reuses
+          -- the cleared shaft before descending to the next level.
+          s.levelTransition={x=0,y=plan[s.index-1].y,z=0};save()
+          finishLevelTransition()
         end
       end
     end

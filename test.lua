@@ -71,7 +71,7 @@ local function scenario(opts)
   local function inspect(side)
     inspections=inspections+1
     local state=checkpointState and checkpointState()
-    if state and state.phase=='home' and state.service.reason=='Band complete' and not injected then
+    if state and state.phase=='home' and #state.route>0 and state.service.reason~='Initial chest/fuel check' and not injected then
       if opts.injectReturnFuel then f=0;coal=2;coalSlot=2;injected=true end
       if opts.blockShortcut then world['1,2,1']='minecraft:bedrock'; injected=true end
       if opts.blockBridge then world['0,1,0']=opts.breakableBridge and 'minecraft:stone' or 'minecraft:bedrock'; injected=true end
@@ -100,7 +100,7 @@ local function scenario(opts)
     actions=actions+1
     local recoveryInterrupt=recoveryMoveCrash and checkpointState().phase=='recovery'
     if recoveryInterrupt and not opts.recoveryAfter then recoveryMoveCrash=false; error('unload before recovery movement') end
-    local interrupt=crash and not opts.turnCrash and (opts.detourCrash and checkpointState().service and checkpointState().service.excavating or not opts.detourCrash and (opts.networkAcceptedCrash and checkpointState().companionReturn and checkpointState().companionReturn.result=='accepted' or not opts.networkAcceptedCrash and actions>=(opts.at or 1)))
+    local interrupt=crash and not opts.turnCrash and (opts.detourCrash and checkpointState().service and checkpointState().service.excavating or not opts.detourCrash and (opts.networkAcceptedCrash and checkpointState().companionReturn and checkpointState().companionReturn.result=='accepted' or opts.transitionCrash and checkpointState().levelTransition or not opts.transitionCrash and not opts.networkAcceptedCrash and actions>=(opts.at or 1)))
     if interrupt and not opts.crashAfter then crash=false; error('simulated unload before movement') end
     local q=target(side); if world[key(q)] and world[key(q)]~='mod:oil' then return false end
     if f<=0 then return false end moves=moves+1; f=f-1; p.x=q.x;p.y=q.y;p.z=q.z; if recoveryInterrupt then recoveryMoveCrash=false; error('unload after recovery movement') end; if interrupt then crash=false; error('simulated unload after movement') end; return true
@@ -255,9 +255,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.5','9.0.0')
+    local source=program:gsub('1%.6%.6','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.5','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.6','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -555,6 +555,13 @@ local function scenario(opts)
   elseif opts.fuel and not opts.chestCoal and not opts.carriedCoal then assert(s.phase=='dock')
   else
     assert(s.phase=='done','Expected done, got '..s.phase)
+    if opts.transitionCrash then assert(not crash and not s.levelTransition,'Interrupted level transition did not finish') end
+    if opts.continuousLevels then
+      local visits=0;for _,message in ipairs(messages) do if message:find('At starting chest:',1,true) then visits=visits+1 end end
+      assert(visits==2,'Unnecessary chest visit between levels: '..visits)
+      assert(table.concat(messages,'\n'):find('Continuing to the next level.',1,true),'Missing level transition report')
+      assert(s.tunnels['0,8,0'],'Did not reach later level through the shaft')
+    end
     if opts.protectedScan then assert(world['0,1,1']=='minecraft:bedrock','Mined protected scan neighbor') end
     if opts.injectReturnFuel or opts.injectRecoveryFuel then assert(injected and consumed>0 and table.concat(messages,'\n'):find('Return fuel safety: used carried fuel',1,true),'Return did not consume carried fuel') end
     if not opts.air and not opts.stoneOnly and width>=3 and length>=3 and s.shape.h>=6 then
@@ -789,6 +796,9 @@ check('Emergency rejects ordinary remote return',{network=true,emergencyCase=tru
 check('Recovery rejects ordinary remote return',{network=true,crashAfter=true,at=45,networkRecoveryReturn=true})
 check('Wrong station commands ignored',{network=true,networkBadSender=true})
 check('Arbitrary wireless actions ignored',{network=true,networkBadAction=true})
+
+check('Interrupted level transition resumes through known shaft',{width=5,length=4,depth=12,stoneOnly=true,transitionCrash=true,crashAfter=true})
+check('Continuous multi-level mining avoids chest visits',{width=16,length=16,depth=12,stoneOnly=true,continuousLevels=true})
 
 -- Every action offset remains covered, before/after movement and turning.
 for at=1,140 do
