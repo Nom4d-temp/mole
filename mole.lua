@@ -1,6 +1,6 @@
--- Mole v1.5.0: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.5.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.5.0'
+local VERSION='1.5.1'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -179,7 +179,7 @@ local function ensureStartup()
   installation.installed=updated; writeFile(INSTALL,installation)
   if content==updated then return end
   local h=assert(fs.open(path,'w'));  h.write(updated); h.close()
-  log('Automatic restart enabled for Mole.')
+  log('Automatic restart enabled.')
 end
 if argv[1]=='update' then
   local function update()
@@ -261,29 +261,32 @@ local function settingsMenu()
     else print('Choose 1, 2, 3 or 4.') end
   end
 end
-local function usage()
+local function usage(full)
   print('Mole '..VERSION..' - tunnel miner')
   if s then
     local names={work='Mining',home='Returning home',out='Returning to work',dock='At the chest',paused='Paused',done='Finished',recovery='Recovering position',emergency='Emergency escape',rescued='Waiting for retrieval'}
     print('Saved job: '..(names[s.phase] or s.phase)..'.')
   end
-  print('mole new      Set up and start a new quarry')
-  print('mole resume   Resume a job or recover interrupted movement')
-  print('mole status   Show progress and next steps')
-  print('mole return   Return home and pause')
-  print('mole settings Change the trash list')
-  print('mole update   Install the latest version')
-  print('mole reset    Clear the job and restore defaults')
-  print('mole delete   Uninstall (asks yes/no)')
-  print('Hold Ctrl+T to stop. Use mole resume afterward.')
+  print('mole new     Start a new quarry')
+  print('mole resume  Continue or recover')
+  print('mole status  Check progress')
+  print('mole return  Go home and pause')
+  if full then
+    print('mole settings  Change trash list')
+    print('mole update    Get latest version')
+    print('mole reset     Clear job/settings')
+    print('mole delete    Uninstall Mole')
+  else print('mole help    All commands') end
+  print('Ctrl+T: stop; mole resume: continue')
+
 end
 if not argv[1] then
   local installed=fs.exists(INSTALL)
   ensureStartup()
-  if not installed then print('Mole is ready. Place the turtle with a chest behind it, then run mole new.') end
+  if not installed then print('Ready. Chest behind; use mole new.') end
   usage();return
 end
-if argv[1]=='help' then usage();return end
+if argv[1]=='help' then usage(true);return end
 local commands={new=true,resume=true,status=true,['return']=true,settings=true,config=true}
 if not commands[argv[1]] then print('Unknown command: '..argv[1]);usage();return end
 if argv[1]=='settings' or argv[1]=='config' then settingsMenu(); return end

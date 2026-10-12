@@ -185,9 +185,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.5%.0','9.0.0')
+    local source=program:gsub('1%.5%.1','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.5%.0','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.5%.1','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -328,17 +328,25 @@ local function scenario(opts)
     return
   end
   if opts.commandFlow then
+    local firstLine=#messages+1
     rawRun();assert(actions==0 and prompts==0 and not checkpointState(),'Plain mole started a quarry')
+    local rows=0
+    for i=firstLine,#messages do rows=rows+math.max(1,math.ceil(#messages[i]/39)) end
+    assert(rows<=11,'First launch guide does not fit 39x12 terminal')
+    for i=firstLine,#messages do assert(#messages[i]<=39,'Guide line wraps on turtle terminal') end
+
     assert(files['mole-install-data'],'First launch did not initialize installation')
     if opts.existingStartup then assert(files['startup.lua']=='existing startup','Installation overwrote custom startup')
     else assert(files['startup.lua']:find('shell.run(program, "resume")',1,true),'Startup does not resume') end
     local previous=prompts;rawRun('resume');assert(prompts==previous and not checkpointState(),'Resume started a new job')
-    rawRun();assert(actions==0 and prompts==0,'Repeated plain mole started a job')
+    firstLine=#messages+1;rawRun();assert(actions==0 and prompts==0,'Repeated plain mole started a job')
+    assert(#messages-firstLine+1<=11,'Guide leaves no shell prompt space')
+    for i=firstLine,#messages do assert(#messages[i]<=39,'Repeated guide line wraps') end
   end
   if opts.deleteCorrupt then files['quarry-data/config']='damaged config' else run() end
   if opts.commandFlow then
     local before=actions;local beforePrompts=prompts;local beforeClears=clears
-    rawRun();rawRun('resume')
+    rawRun();rawRun('help');rawRun('resume')
     assert(actions==before and prompts==beforePrompts,'Finished job restarted without new')
     assert(clears==beforeClears and clears==1,'Cleared useful output outside new setup')
   end
