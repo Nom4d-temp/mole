@@ -256,9 +256,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.9','9.0.0')
+    local source=program:gsub('1%.6%.10','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.9','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.10','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -512,7 +512,7 @@ local function scenario(opts)
   if opts.crash or opts.crashAfter or opts.turnCrash then
     if opts.returnDuringRecovery then
       run('return'); assert(checkpointState().phase=='paused' and p.y==0,'Return request not honored during recovery')
-      assert(table.concat(messages,'\n'):find('Returned home and paused as requested. Run mole resume to resume.',1,true),'Requested pause sounds like an error')
+      assert(table.concat(messages,'\n'):find('Returned home and paused as requested. Run \'mole resume\' to resume.',1,true),'Requested pause sounds like an error')
       run()
     else run() end
   end

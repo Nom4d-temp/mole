@@ -1,6 +1,6 @@
--- Mole v1.6.9: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.10: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.9'
+local VERSION='1.6.10'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -368,7 +368,7 @@ function net.menu(station,code)
         local raw=station or answer('Station computer ID (q cancels):')
         if tostring(raw):lower()=='q' then return end
         id=tonumber(raw);if net.validNumber(id) and id>=0 then break end
-        print('Use a whole station ID, or q.')
+        print('Use a whole station ID, or \'q\'.')
         if station then return end
       end
       local pin
@@ -376,7 +376,7 @@ function net.menu(station,code)
         pin=tostring(code or answer('Pairing code (q cancels):'))
         if pin:lower()=='q' then return end
         if pin:match('^%d%d%d%d%d%d$') then break end
-        print('Use the six digits shown, or q.')
+        print('Use the six digits shown, or \'q\'.')
         if code then return end
       end
       local hello={v=1,kind='pair_hello',code=pin,wireless=true,name=os.getComputerLabel and os.getComputerLabel() or 'Mole '..os.getComputerID()}
@@ -550,19 +550,19 @@ local function usage(full)
     print('mole delete    Uninstall Mole')
     print('mole companion Wireless setup')
   else print('mole help    All commands') end
-  print(full and 'Ctrl+T: stop' or 'Ctrl+T: stop; mole resume: continue')
+  print(full and 'Ctrl+T: stop' or 'Ctrl+T: stop; \'mole resume\': continue')
 
 end
 if not argv[1] then
   local installed=fs.exists(INSTALL)
   ensureStartup()
-  if not installed then print('Ready. Chest behind; use mole new.') end
+  if not installed then print('Ready. Chest behind; use \'mole new\'.') end
   usage();return
 end
 if argv[1]=='help' then usage(true);return end
 if argv[1]=='companion' or argv[1]=='pair' then
   local ok,why=pcall(net.menu,argv[1]=='pair' and argv[2] or nil,argv[3])
-  if not ok then print('Wireless setup stopped. Mining unchanged.');print('Check modems and try mole companion.') end
+  if not ok then print('Wireless setup stopped. Mining unchanged.');print('Check modems and try \'mole companion\'.') end
   return
 end
 local commands={new=true,resume=true,status=true,['return']=true,settings=true,config=true}
@@ -570,9 +570,9 @@ if not commands[argv[1]] then print('Unknown command: '..argv[1]);usage();return
 if argv[1]=='settings' or argv[1]=='config' then settingsMenu(); return end
 -- Require a known starting elevation for every supported job.
 if s and (type(s.startY)~='number' or s.startY~=s.startY or math.abs(s.startY)==math.huge or s.startY%1~=0) then
-  log('Saved job has no valid starting Y. Retrieve the turtle, then use mole reset and start a new job.');return
+  log('Saved job has no valid starting Y. Retrieve the turtle, then use \'mole reset\' and start a new job.');return
 end
-if not s and argv[1]~='new' then print('No saved quarry. Run mole new to create one.');return end
+if not s and argv[1]~='new' then print('No saved quarry. Run \'mole new\' to create one.');return end
 local fresh=argv[1]=='new'
 if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
@@ -609,7 +609,7 @@ if fresh then
       if choice=='yes' then break end
       if choice=='q' or choice=='' and safeDepth<1 then return end
       if choice=='' then depth=safeDepth; break end
-      print('Use Enter, yes, or q.')
+      print('Use Enter, \'yes\', or \'q\'.')
     end
   end
   print('\nPlace a chest directly BEHIND this turtle.')
@@ -643,12 +643,12 @@ if argv[1]=='status' then
     log('Reason: '..s.emergency.reason)
     log('Climb remaining: '..s.emergency.p.y..' blocks. Fuel: '..fuelText()..'.')
     if s.emergency.targetY then log('Retrieval target: Y '..s.emergency.targetY) end
-    log(s.phase=='rescued' and 'Retrieve and reposition the turtle, then run mole reset.' or 'Run mole resume to continue emergency escape.');return
+    log(s.phase=='rescued' and 'Retrieve and reposition the turtle, then run \'mole reset\'.' or 'Run \'mole resume\' to continue emergency escape.');return
   end
   log((s.pending or s.recovery) and 'Position is being checked. Fuel: '..fuelText()..'.' or depthText(s.p)..'. Fuel: '..fuelText()..'.')
-  if s.phase=='done' then log('For a new job, reposition the turtle and chest, then run mole new.')
-  elseif s.phase=='paused' then log('Run mole resume to resume, or mole new to start a new job.')
-  else log('Run mole resume to '..((s.pending or s.recovery) and 'continue position recovery.' or 'resume the saved job.')) end
+  if s.phase=='done' then log('For a new job, reposition the turtle and chest, then run \'mole new\'.')
+  elseif s.phase=='paused' then log('Run \'mole resume\' to resume, or \'mole new\' to start a new job.')
+  else log('Run \'mole resume\' to '..((s.pending or s.recovery) and 'continue position recovery.' or 'resume the saved job.')) end
   return
 end
 local dx={0,1,0,-1}; local dz={1,0,-1,0}
@@ -759,12 +759,12 @@ local function trash()
       local occupied=turtle.inspectDown()
       if occupied or peripheral.isPresent('bottom') then
         turtle.select(1)
-        error('Trash drop blocked below start; clear the space underneath, then run mole resume.',0)
+        error('Trash drop blocked below start; clear the space underneath, then run \'mole resume\'.',0)
       end
       turtle.select(i)
       if not turtle.dropDown() or turtle.getItemCount(i)>0 then
         turtle.select(1)
-        error('Trash could not be dropped below start; clear the space underneath, then run mole resume.',0)
+        error('Trash could not be dropped below start; clear the space underneath, then run \'mole resume\'.',0)
       end
     end
   end
@@ -974,14 +974,14 @@ local function organizeFuel(inv)
       if contents[target] then
         local empty
         for i=inv.size(),1,-1 do if i~=target and not contents[i] then empty=i;break end end
-        if not empty then failure('CHEST_FULL','Chest needs an empty slot to organize fuel. Make room and run mole resume.') end
+        if not empty then failure('CHEST_FULL','Chest needs an empty slot to organize fuel. Make room and run \'mole resume\'.') end
         local moved=inv.pushItems('front',target,contents[target].count,empty)
-        if moved~=contents[target].count then failure('CHEST_CHANGED','Waiting at the starting chest. Stop other machines or players changing this chest, make room for output, then run mole resume.') end
+        if moved~=contents[target].count then failure('CHEST_CHANGED','Waiting at the starting chest. Stop other machines or players changing this chest, make room for output, then run \'mole resume\'.') end
       end
       local item=inv.list()[source]
-      if not item or not c.fuel[item.name] then failure('CHEST_CHANGED','Waiting at the starting chest. Keep fuel together in the reserved slots from slot 1 and stop other chest transfers, then run mole resume.') end
+      if not item or not c.fuel[item.name] then failure('CHEST_CHANGED','Waiting at the starting chest. Keep fuel together in the reserved slots from slot 1 and stop other chest transfers, then run \'mole resume\'.') end
       local moved=inv.pushItems('front',source,item.count,target)
-      if moved~=item.count then failure('CHEST_CHANGED','Waiting at the starting chest. Leave an empty chest slot and stop other chest transfers, then run mole resume.') end
+      if moved~=item.count then failure('CHEST_CHANGED','Waiting at the starting chest. Leave an empty chest slot and stop other chest transfers, then run \'mole resume\'.') end
     end
   end
 end
@@ -994,8 +994,8 @@ local function unload()
       local item=turtle.getItemDetail(i)
       if item and ((pass==1 and c.fuel[item.name]) or (pass==2 and not c.fuel[item.name])) then
         turtle.select(i)
-        if turtle.getItemCount(i)>0 and not turtle.drop() then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run mole resume.') end
-        if turtle.getItemCount(i)>0 then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run mole resume.') end
+        if turtle.getItemCount(i)>0 and not turtle.drop() then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run \'mole resume\'.') end
+        if turtle.getItemCount(i)>0 then failure('CHEST_FULL','Waiting at the starting chest. Make room in the chest, then run \'mole resume\'.') end
       end
     end
   end
@@ -1017,31 +1017,31 @@ local function chestFuel(target,minimum)
     if fuel()>=target then break end
     local listed=inv.list()
     for i=1,entry.slot-1 do
-      if listed[i] then problem='Fuel slots changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run mole resume.'; break end
+      if listed[i] then problem='Fuel slots changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run \'mole resume\'.'; break end
     end
     if problem then break end
     local live=listed[entry.slot]
     if not live or live.name~=entry.name or live.count~=entry.count then
-      problem='Fuel changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run mole resume.'; break
+      problem='Fuel changed while refueling. Stop other chest transfers, arrange fuel from slot 1, then run \'mole resume\'.'; break
     end
     local slot
     for i=1,16 do if turtle.getItemCount(i)==0 then slot=i; break end end
-    if not slot then problem='Not enough turtle inventory space for fuel or empty buckets. Make room in the chest and turtle inventory, then run mole resume.'; break end
+    if not slot then problem='Not enough turtle inventory space for fuel or empty buckets. Make room in the chest and turtle inventory, then run \'mole resume\'.'; break end
     turtle.select(slot)
-    if not turtle.suck(math.min(entry.count,64)) then problem='Could not take fuel from the chest. Check that it can supply items and stop other transfers, then run mole resume.'; break end
+    if not turtle.suck(math.min(entry.count,64)) then problem='Could not take fuel from the chest. Check that it can supply items and stop other transfers, then run \'mole resume\'.'; break end
     local taken=turtle.getItemDetail(slot)
     if not taken or taken.name~=entry.name or turtle.getItemCount(slot)~=math.min(entry.count,64) then
-      problem='Received unexpected items from the chest; returning them. Stop other transfers and arrange fuel from slot 1, then run mole resume.'; break
+      problem='Received unexpected items from the chest; returning them. Stop other transfers and arrange fuel from slot 1, then run \'mole resume\'.'; break
     end
     local before=fuel(); refuelTo(target)
-    if fuel()==before then problem='The configured fuel item does not refuel this turtle. Supply coal, charcoal, or lava buckets; correct custom fuel entries in quarry-data/config, then run mole resume.'; break end
+    if fuel()==before then problem='The configured fuel item does not refuel this turtle. Supply coal, charcoal, or lava buckets; correct custom fuel entries in quarry-data/config, then run \'mole resume\'.'; break end
     -- Keep empty buckets and unused fuel onboard until the sequence finishes.
   end
   if fuel()>initialFuel then log('Fuel after chest refueling: '..fuelText()..' (target: '..target..').') end
   unload()
   organizeFuel(inv)
   if problem then failure('CHEST_CHANGED',problem) end
-  if fuel()<minimum then failure('NEED_FUEL','Waiting at the starting chest. Fuel: '..fuelText()..'; minimum needed: '..minimum..'. Add fuel to the reserved chest slots, starting at slot 1, then run mole resume.') end
+  if fuel()<minimum then failure('NEED_FUEL','Waiting at the starting chest. Fuel: '..fuelText()..'; minimum needed: '..minimum..'. Add fuel to the reserved chest slots, starting at slot 1, then run \'mole resume\'.') end
   if fuel()<target then log('Fuel is below the preferred target, but the safe minimum '..minimum..' is met. Resuming mining.') end
 end
 local function requestService(reason, pause)
@@ -1091,7 +1091,7 @@ local function service()
     unload()
     organizeFuel(peripheral.wrap('front'))
     if s.service.reason=='Quarry complete' then
-      s.phase='done'; save(); pcall(net.status);pcall(net.flush); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run mole new.'); return false
+      s.phase='done'; save(); pcall(net.status);pcall(net.flush); log('Job finished. Haul unloaded. Remaining fuel: '..fuelText()..'. No refueling needed.'); log('To mine elsewhere, reposition the turtle and chest, then run \'mole new\'.'); return false
     end
     if s.service.pause then
       if s.companionReturn and s.companionReturn.result=='accepted' then
@@ -1100,7 +1100,7 @@ local function service()
         net.receipt(s.companionReturn.id,'completed','Home and paused.')
       end
       s.phase='paused'; save(); pcall(net.status);pcall(net.flush); log('Refueling deferred while paused. Fuel: '..fuelText()..'.')
-      log(s.service.reason=='User requested return' and 'Returned home and paused as requested. Run mole resume to resume.' or 'Paused at the starting chest: '..s.service.reason..'. Resolve the issue, then run mole resume.'); return false
+      log(s.service.reason=='User requested return' and 'Returned home and paused as requested. Run \'mole resume\' to resume.' or 'Paused at the starting chest: '..s.service.reason..'. Resolve the issue, then run \'mole resume\'.'); return false
     end
     local target=s.service.target or s.service.path[#s.service.path] or origin
     local shortest=knownPath(origin,target)
@@ -1531,7 +1531,7 @@ local function emergencyTrash()
 end
 local function emergencyDig(side,inspect,per)
   emergencyTrash()
-  if freeSlots()<2 then error('No inventory space for emergency digging; valuables kept. Clear space and run mole resume.',0) end
+  if freeSlots()<2 then error('No inventory space for emergency digging; valuables kept. Clear space and run \'mole resume\'.',0) end
   local occupied,block=inspect()
   if protectedBlock(occupied and block or nil,per) then return false end
   if not occupied or passable[block.name] then return true end
@@ -1545,7 +1545,7 @@ local function emergencyAscent()
   local e=s.emergency
   while e.p.y>0 do
     refuelTo(e.p.y+c.emergencyFuelMargin+8)
-    if fuel()<e.p.y then error('Insufficient fuel for emergency ascent; progress saved. Add fuel and run mole resume.',0) end
+    if fuel()<e.p.y then error('Insufficient fuel for emergency ascent; progress saved. Add fuel and run \'mole resume\'.',0) end
     local q=emergencyPath()
     if not q then error('No emergency ascent route within the detour radius and remaining fuel; progress saved.',0) end
     local side='up';local op='up'
@@ -1587,10 +1587,10 @@ local function emergencyAscent()
     if not moved then e.blocked[key(q)]=true;save();log('Emergency ascent blocked. Trying a sideways detour; no action needed yet.') end
   end
   s.phase='rescued';save()
-  log('Emergency escape finished at the retrieval level. Mining remains stopped. Retrieve and reposition the turtle, then run mole reset.')
+  log('Emergency escape finished at the retrieval level. Mining remains stopped. Retrieve and reposition the turtle, then run \'mole reset\'.')
   if e.heightUncertainty>0 then log('Height was uncertain; the turtle may finish '..e.heightUncertainty..' block(s) above the target.') end
   log('Remaining fuel after emergency ascent: '..fuelText()..'.')
-  log('This is a retrieval point, not confirmation of open sky. Use mole reset only after positioning the turtle for a new job.')
+  log('This is a retrieval point, not confirmation of open sky. Use \'mole reset\' only after positioning the turtle for a new job.')
 end
 local emergencyFailures={NO_ROUTE=true,NO_HOME_ROUTE=true,INSUFFICIENT_RETURN_FUEL=true,
   RETURN_FUEL_LOW=true,NO_CHEST_CONFIRMATION=true,RETURN_RECOVERY_FUEL=true,RECOVERY_FUEL_LOW=true,
@@ -1599,25 +1599,25 @@ local function fallbackReason(why) return emergencyFailures[failureCode(why)]==t
 local function stoppedAdvice(err)
   local code=failureCode(err)
   if code=='CHEST_FULL' or code=='CHEST_CHANGED' or code=='NEED_FUEL' then
-    log('Waiting at the starting chest. Follow the instructions above, then run mole resume.')
+    log('Waiting at the starting chest. Follow the instructions above, then run \'mole resume\'.')
   else
-    log('Progress saved at '..depthText(s.p)..'. Check the reported obstruction or error, then run mole resume to retry. Do not move or turn the turtle.')
-    log('Use mole reset only after retrieving and repositioning the turtle.')
+    log('Progress saved at '..depthText(s.p)..'. Check the reported obstruction or error, then run \'mole resume\' to retry. Do not move or turn the turtle.')
+    log('Use \'mole reset\' only after retrieving and repositioning the turtle.')
   end
 end
 local function attemptEmergency(why)
   local ok,err=pcall(function() if s.phase~='emergency' then startEmergency(tostring(why)) end;emergencyAscent() end)
-  if not ok then log('Emergency escape saved: '..tostring(err)..'. Run mole resume to retry.') end
+  if not ok then log('Emergency escape saved: '..tostring(err)..'. Run \'mole resume\' to retry.') end
 end
 local function miningMain()
 if s.phase=='rescued' then
-  log('Emergency ascent already completed. Mining stays paused; retrieve the turtle and use mole reset at a safe starting point.');return
+  log('Emergency ascent already completed. Mining stays paused; retrieve the turtle and use \'mole reset\' at a safe starting point.');return
 end
 if s.phase=='emergency' then attemptEmergency(s.emergency.reason);return end
 
 if s.phase=='done' then
   print('Mining finished! Items are in the chest.')
-  print('For a new job, face into the new area, then mole new.'); return
+  print('For a new job, face into the new area, then \'mole new\'.'); return
 end
 if s.phase=='paused' then
   if argv[1]=='return' then print('Already paused at the starting chest.'); return end
@@ -1685,7 +1685,7 @@ if not ok then
   log(tostring(err))
   if s.pending or s.recovery then
     if fallbackReason(err) then attemptEmergency(err);return end
-    log('Recovery saved. Run mole resume (or let startup run it) to retry automatic chest homing.'); return
+    log('Recovery saved. Run \'mole resume\' (or let startup run it) to retry automatic chest homing.'); return
   end
   -- An error during a return must not overwrite the original outbound route.
   if s.phase=='work' then
