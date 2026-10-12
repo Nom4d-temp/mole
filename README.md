@@ -67,23 +67,11 @@ If you already use your own startup program, the miner keeps it. To make that ex
 
 ## What will it dig?
 
-The turtle makes **one-block-high tunnels**, normally with **two columns of stone between them**. It connects the tunnels at their ends. The next tunnel level is **three blocks lower**. It also makes an entry shaft below the starting corner.
+Mole digs one-block-high tunnels, leaving two columns between them and three blocks between tunnel levels. It checks neighboring blocks and follows connected ores and other non-trash blocks within your chosen area. Ordinary stone is mined only when needed for movement. Some hidden ores and very large veins may be missed.
 
-At every tunnel step it checks the blocks above, below, in front, behind, left, and right. It leaves ordinary trash blocks alone unless it needs to break them to move. If it finds a block that is not on the trash list, it follows connected non-trash blocks to collect the vein. Unknown blocks from mods are kept by default.
+It returns to the chest when inventory or fuel runs low, after each tunnel level, and when finished. It uses known tunnels where possible and tries to clear or dig around blocked return paths. Protected blocks and detected machines are left alone; keep the quarry and its one-block emergency border clear of builds.
 
-**Mole uses tunnel mining.** Stone stays in the walls, ceiling, and floor. Some isolated ores hidden between tunnels can be missed because the turtle cannot see through stone. Connected veins it finds are followed inside the chosen area. A search has size and depth limits so huge modded deposits cannot make the turtle wander forever; some of a very large deposit may remain.
-
-At the starting chest, Mole reports its current fuel, the target for the next trip, why that target is needed, and its fuel after refueling. The default target is **2,560 fuel units**, equal to 32 coal or charcoal from empty. Existing settings using the former 2,000 target are upgraded to 2,560; other custom targets are kept. Longer routes can require a higher target. It uses coal, charcoal, or lava buckets only when below the target. Whole fuel items can take it slightly above the target. When the job finishes, it reports remaining fuel and does not refuel.
-
-The turtle returns to the chest when its inventory is nearly full, it needs fuel, or a tunnel level is finished. It also comes home when it finishes the whole job. It chooses the shortest route through cells it has already visited, and uses known tunnels to get back to work. If a passage becomes blocked, it tries another known route. If none is clear, it tries to mine the obstruction, then digs a detour toward the starting position. It reconnects to known tunnels as soon as it can. Emergency detours can extend one block past the far edges of the chosen width and length, and can reach the surface. Keep that border clear of builds. Protected blocks and machines are still left alone. If every approach is blocked, fuel is insufficient, or inventory space runs out, it saves progress and reports the problem after attempting to return.
-
-## Refueling with lava buckets
-
-Lava buckets are accepted alongside coal and charcoal. Mole reads the fuel sequence from chest slot 1 onward and stops at the first empty or non-fuel slot. It consumes only enough fuel to reach its target; it does not automatically use every bucket it finds.
-
-Empty buckets stay in the turtle until that refueling pass finishes, then are returned to the chest with unused fuel. Before the next refueling visit, remove returned empty buckets from the front slots and refill any gaps: an empty bucket counts as a non-fuel item. If chest contents change during refueling, Mole stops and reports the problem. It needs spare chest space to return buckets and unload its haul.
-
-Existing configurations gain lava-bucket support once; an explicitly disabled lava-bucket entry is preserved. You can edit allowed fuels in the config file. Mole does not collect lava from the world or refill buckets itself.
+At the chest, Mole unloads its haul, drops trash underneath the starting position, and reports its fuel target and current level. The default target is **2,560 units**—32 coal or charcoal from empty—and increases for longer routes. Finished jobs do not refuel.
 
 ## Everyday controls
 
@@ -108,6 +96,14 @@ While the miner is running, hold **Ctrl+T** to stop the program. Then type `mole
 When Mole replaces a supported startup file, it saves the original and restores it on uninstall. If Mole created startup from scratch, uninstall removes it. Unrelated startup scripts are preserved. If you edit startup after installation, uninstall keeps your edited file; remove any Mole launch line yourself. Existing installations from older versions have no original backup: uninstall can remove recognizable Mole startup, but cannot recover a file that was already overwritten. `mole reset` keeps the installation record and startup backup so you can still uninstall later.
 
 Do not pick up, move, or turn the turtle during a saved job. After a job is finished, you can move it to a new starting corner, put the chest behind it, and run `mole new`. If you paused an unfinished job to start a new one, that abandons the old job; its last state is saved as `quarry-data/previous-job` for reference.
+
+## Refueling with lava buckets
+
+Lava buckets are accepted alongside coal and charcoal. Mole reads the fuel sequence from chest slot 1 onward and stops at the first empty or non-fuel slot. It consumes only enough fuel to reach its target; it does not automatically use every bucket it finds.
+
+Empty buckets stay in the turtle until that refueling pass finishes, then are returned to the chest with unused fuel. Before the next refueling visit, remove returned empty buckets from the front slots and refill any gaps: an empty bucket counts as a non-fuel item. If chest contents change during refueling, Mole stops and reports the problem. It needs spare chest space to return buckets and unload its haul.
+
+Existing configurations gain lava-bucket support once; an explicitly disabled lava-bucket entry is preserved. You can edit allowed fuels in the config file. Mole does not collect lava from the world or refill buckets itself.
 
 ## Change the trash list
 
