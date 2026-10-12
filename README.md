@@ -1,4 +1,4 @@
-# Mole 1.4.0
+# Mole 1.4.1
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -105,7 +105,7 @@ If normal home-return routes, return excavation, or chest recovery fail, Mole ca
 
 The default destination is the starting elevation. If you entered a starting Y, you can choose a higher emergency target Y during setup. Reaching that height does **not** prove the turtle is above ground. If recovery leaves two possible heights, it uses the deeper estimate, so it may finish slightly above the target.
 
-Emergency movement is saved separately and resumes after a restart. Valuable items are kept. If trash dropping is enabled, listed trash may be dropped into empty space below during the escape to make room; this is a last-resort exception to normal chest-only disposal. Mole still respects protected blocks and detected machines. It stops with saved progress if fuel is insufficient, inventory cannot accept mined blocks, or no detour fits the available fuel and radius. It cannot escape every obstruction.
+Emergency movement is saved separately and resumes after a restart. Valuable items are kept. If a full inventory blocks emergency digging, Mole attempts to discard listed trash—even if ordinary trash dropping is off—until two slots are free. It tries below, then in front and above, and can attempt a drop against ordinary stone. Detected inventories, protected blocks, and unknown solid blocks are avoided. Fuel and non-trash items are kept. This is a last-resort exception to normal chest-only disposal. If dropping fails or no disposable trash remains, it saves progress and waits for help. Mole still respects protected blocks and detected machines. It stops with saved progress if fuel is insufficient, inventory cannot accept mined blocks, or no detour fits the available fuel and radius. It cannot escape every obstruction.
 
 After reaching the target, Mole stays paused for retrieval and never automatically resumes the old mining job. `mole status` shows the emergency reason and remaining climb. Retrieve the turtle, position it at a safe starting point, then use `mole reset` and `mole` to begin again; reset permanently clears the old job.
 
@@ -176,5 +176,6 @@ The file contains the trash list, allowed fuel items, protected blocks, fuel tar
 ## AI disclosure
 
 Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
+
 
 

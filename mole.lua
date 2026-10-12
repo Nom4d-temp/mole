@@ -1,6 +1,6 @@
--- Mole v1.4.0: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.1: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.0'
+local VERSION='1.4.1'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -276,7 +276,7 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.0 - first-time setup')
+  print('\nMole 1.4.1 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
   print('Press Enter for each default, or q to cancel.')
   print('Length goes forward; width goes to the right.')
@@ -1116,12 +1116,29 @@ local function emergencyPath()
   end
 end
 local function emergencyTrash()
-  if not c.discardTrash then return end
-  local occupied=turtle.inspectDown()
-  if occupied or peripheral.isPresent('bottom') then return end
-  for i=1,16 do
-    local item=turtle.getItemDetail(i)
-    if item and c.trash[item.name] and not c.fuel[item.name] then turtle.select(i);turtle.dropDown() end
+  local urgent=freeSlots()<2
+  if not c.discardTrash and not urgent then return end
+  local directions={
+    {inspect=turtle.inspectDown,drop=turtle.dropDown,per='bottom'},
+    {inspect=turtle.inspect,drop=turtle.drop,per='front'},
+    {inspect=turtle.inspectUp,drop=turtle.dropUp,per='top'},
+  }
+  for _,side in ipairs(directions) do
+    local occupied,block=side.inspect()
+    -- Dropping trash against ordinary stone is allowed in an emergency.
+    -- Never insert it into a detected inventory or a protected/unknown block.
+    if not protectedBlock(occupied and block or nil,side.per)
+      and (not occupied or passable[block.name] or c.trash[block.name]) then
+      for i=1,16 do
+        if urgent and freeSlots()>=2 then turtle.select(1);return end
+        local item=turtle.getItemDetail(i)
+        if item and c.trash[item.name] and not c.fuel[item.name] then
+          turtle.select(i);local before=turtle.getItemCount(i)
+          side.drop()
+          if turtle.getItemCount(i)<before then log('Emergency escape: discarded trash to make inventory space.') end
+        end
+      end
+    end
   end
   turtle.select(1)
 end
