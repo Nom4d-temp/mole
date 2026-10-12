@@ -1,4 +1,4 @@
-# Mole 1.4.4
+# Mole 1.4.5
 
 [GitHub repository](https://github.com/Nom4d-temp/mole)
 
@@ -49,21 +49,21 @@ The turtle asks:
 ```text
 Length in blocks [16]:
 Width in blocks [16]:
-Starting world Y coordinate [Enter = unknown]:
+Starting world Y coordinate (required):
 Depth below the turtle [64]:
 ```
 
 Press **Enter** to use the default, or enter a whole number. Type `q` to cancel setup.
 
-For a first test, use **3** for length, **3** for width, and **6** for depth. Enter the starting Y if you know it, or leave it blank. Check that the chest is behind the turtle, then press Enter at the final prompt to begin.
+For a first test, use **3** for length, **3** for width, and **6** for depth. Enter the turtle’s starting Y coordinate. Check that the chest is behind the turtle, then press Enter at the final prompt to begin.
 
-**Starting Y** is the world height of the turtle's own block, not the block underneath. Leave it blank to use depth below the start.
+**Starting Y is required for new jobs.** Enter the world height of the turtle's own block, not the block underneath. Negative whole numbers are accepted. Use your game’s coordinate display to check it before starting.
 
-When Y is known, Mole shows the depth needed to reach **Y -62** and lowers the default depth if necessary. If you request a deeper quarry, it warns you: press Enter to stop at Y -62, or type `yes` to keep your chosen depth, useful in other dimensions. Starting at or below Y -62 also requires `yes` to mine downward. Maximum depth is **512 blocks**.
+Mole shows the depth needed to reach **Y -62** and lowers the default depth if necessary. If you request a deeper quarry, it warns you: press Enter to stop at Y -62, or type `yes` to keep your chosen depth, useful in other dimensions. Starting at or below Y -62 also requires `yes` to mine downward. Maximum depth is **512 blocks**.
 
-Progress and `mole status` show world Y and depth when starting Y is known. Starting Y does not locate the turtle. Setup questions appear only for new jobs.
+Progress and `mole status` show world Y and depth. Starting Y does not locate the turtle. Setup questions appear only for new jobs.
 
-With a starting Y, you can also choose an **emergency target Y**. Leave it blank for the starting elevation, or enter a higher retrieval level. Reaching that height does not guarantee reaching the surface.
+**Emergency escape targets the starting elevation automatically.** If you start underground, this may still be underground. Existing saved jobs keep their settings and resume without asking for a starting Y; older jobs without one continue reporting depth below their start.
 
 Mole saves settings and progress and creates an automatic restart file. If you already have your own startup program, Mole keeps it; add `shell.run("mole")` to that file to enable automatic resuming.
 
@@ -111,8 +111,8 @@ If your modpack offers chunk-loading blocks or a tool such as **FTB Chunks**, we
 - **Safer trips home:** Mole returns when inventory is full or fuel runs low. It uses known tunnels first, then tries to clear or dig around blocked return paths.
 - **Fuel reserves:** Mole adjusts its fuel needs for the journey back to work and keeps a return reserve. During returns and recovery, it can also use fuel carried in its inventory.
 - **Protected blocks and valuables:** Mole avoids configured protected blocks and detected machines. It keeps valuable items and normally drops trash only beneath its starting position.
-- **Depth guidance:** Entering the starting Y lets Mole suggest a depth ending at Y -62 and warn before deeper mining. You can override this for other dimensions.
-- **Emergency escape:** If returning home or finding the chest fails, Mole tries to climb to its starting elevation or your chosen emergency target, with sideways detours around obstacles. If a full inventory blocks escape, it may discard listed trash while keeping fuel and valuables. At the target, it stays paused for retrieval; use `mole status` to check its progress.
+- **Depth guidance:** The starting Y lets Mole suggest a depth ending at Y -62 and warn before deeper mining. You can override this for other dimensions.
+- **Emergency escape:** If returning home or finding the chest fails, Mole tries to climb to its starting elevation (or an emergency target saved by an older version), with sideways detours around obstacles. If a full inventory blocks escape, it may discard listed trash while keeping fuel and valuables. At the target, it stays paused for retrieval; use `mole status` to check its progress.
 
 Emergency escape cannot guarantee reaching the surface or getting past every obstacle. If fuel, space, or a safe route runs out, Mole saves its progress and waits for help.
 
@@ -165,8 +165,3 @@ The file contains the trash list, allowed fuel items, protected blocks, fuel tar
 ## AI disclosure
 
 Mole's code and documentation were generated with OpenAI's ChatGPT, guided by a human who provided requirements and tested the program in Minecraft. It has also been checked with simulated turtle tests. AI-generated code can still contain mistakes, and behavior may vary between modpacks. Test a small quarry before starting a larger job.
-
-
-
-
-

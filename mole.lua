@@ -1,6 +1,6 @@
--- Mole v1.4.4: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.4.5: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.4.4'
+local VERSION='1.4.5'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local ROOT = 'quarry-data'
@@ -280,31 +280,28 @@ if fresh then
   if s and (s.pending or s.recovery or #s.route>0 or (s.phase~='done' and s.phase~='paused')) then
     print('Finish the job or return home before starting a new one.'); return
   end
-  print('\nMole 1.4.4 - first-time setup')
+  print('\nMole 1.4.5 - first-time setup')
   print('We dig tunnels and collect nearby ores.')
-  print('Press Enter for each default, or q to cancel.')
+  print('Press Enter for dimension defaults; starting Y is required. Use q to cancel.')
   print('Length goes forward; width goes to the right.')
   local length=numberQuestion('Length in blocks',c.length,64); if not length then return end
   local width=numberQuestion('Width in blocks',c.width,64); if not width then return end
   local startY
   while true do
-    local raw=answer('Starting world Y coordinate [Enter = unknown]:')
+    local raw=answer('Starting world Y coordinate (required):')
     if raw:lower()=='q' then return end
-    if raw=='' then break end
     local n=tonumber(raw)
     if n and n==n and n~=math.huge and n~=-math.huge and n%1==0 then startY=n; break end
-    print('Enter a whole Y coordinate, including negative numbers, or leave blank.')
+    print('Enter the world Y of this turtle block as a whole number; negative numbers are allowed.')
   end
   local suggested=c.depth
-  local safeDepth=startY and startY+62 or nil
-  if safeDepth then
-    print('Suggested lowest mining level: Y -62.')
-    print('Depth available before Y -62: '..math.max(0,safeDepth)..' blocks below this turtle.')
-    if safeDepth>=1 then suggested=math.min(suggested,safeDepth)
-    else print('This starting position is already at or below Y -62.') end
-  end
+  local safeDepth=startY+62
+  print('Suggested lowest mining level: Y -62.')
+  print('Depth available before Y -62: '..math.max(0,safeDepth)..' blocks below this turtle.')
+  if safeDepth>=1 then suggested=math.min(suggested,safeDepth)
+  else print('This starting position is already at or below Y -62.') end
   local depth=numberQuestion('Depth below the turtle',suggested,512); if not depth then return end
-  if safeDepth and depth>safeDepth then
+  if depth>safeDepth then
     print('Caution: below Y -62, dense bedrock may make mining and return routes difficult.')
     while true do
       print('Requested bottom: Y '..(startY-depth)..', below the suggested Y -62 limit.')
@@ -315,17 +312,6 @@ if fresh then
       if choice=='q' or choice=='' and safeDepth<1 then return end
       if choice=='' then depth=safeDepth; break end
       print('Use Enter, yes, or q.')
-    end
-  end
-  local emergencyTargetY=startY
-  if startY then
-    while true do
-      local raw=answer('Emergency target Y ['..startY..' = starting elevation]:')
-      if raw:lower()=='q' then return end
-      if raw=='' then break end
-      local n=tonumber(raw)
-      if n and n==n and n~=math.huge and n%1==0 and n>=startY then emergencyTargetY=n; break end
-      print('Enter a whole Y at or above the starting Y, or leave blank.')
     end
   end
   print('\nPlace a chest directly BEHIND this turtle.')
@@ -343,7 +329,7 @@ if fresh then
   c.length=length; c.width=width; c.depth=depth; writeFile(CP,c)
   local anchor={type=peripheral.getType('back'),size=peripheral.wrap('back').size()}
   s={anchor=anchor,seq=previousSeq,p={x=0,y=0,z=0,d=0},route={},index=1,phase='work',seen={},vein=nil,
-     layoutVersion=2,startY=startY,emergencyTargetY=emergencyTargetY,program=shell.getRunningProgram(),shape={w=c.width,l=c.length,h=c.depth}}
+     layoutVersion=2,startY=startY,emergencyTargetY=startY,program=shell.getRunningProgram(),shape={w=c.width,l=c.length,h=c.depth}}
   save(); ensureStartup()
   log('Starting '..c.length..' long x '..c.width..' wide, '..c.depth..' blocks deep.')
   log('Start: '..depthText(s.p)..'. Planned bottom: '..depthText({y=c.depth})..'.')
@@ -808,7 +794,7 @@ local function service()
     local n=#s.service.path
     local escapeNeeded=ascentDistance(target.y)
     local needed=n+math.max(reserve(n),escapeNeeded>0 and escapeNeeded+c.emergencyFuelMargin+32 or 0)+64
-    assert(needed<=capacity() or fuel()==math.huge,'Route exceeds fuel capacity; reduce depth, emergency target Y, or vein limits.')
+    assert(needed<=capacity() or fuel()==math.huge,'Route exceeds fuel capacity; reduce depth or vein limits.')
     local fuelTarget=math.min(capacity(),math.max(c.fuelTarget,needed))
     log('Fuel target: '..fuelTarget..' units, for '..n..' moves back to work, a safe return/recovery reserve, and more mining.')
     if fuel()>=fuelTarget then
