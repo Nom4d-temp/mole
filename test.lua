@@ -61,6 +61,7 @@ local function scenario(opts)
   if opts.stoneOnly then
     for k in pairs(world) do world[k]='minecraft:stone' end
   end
+  if opts.repeatDeposit then world['1,5,2']='mod:ore' end
   if opts.vanillaOre then for k,v in pairs(world) do if v=='mod:ore' then world[k]='minecraft:iron_ore' end end end
   if opts.fluid then for k,v in pairs(world) do if v=='minecraft:stone' then world[k]='mod:oil' end end end
   if opts.air then world={} end
@@ -259,9 +260,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.14','9.0.0')
+    local source=program:gsub('1%.6%.15','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.14','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.15','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -575,6 +576,8 @@ local function scenario(opts)
       local removed=0; for _ in pairs(dug) do removed=removed+1 end
       assert(removed<width*length*depth/2,'Excavated too much trash')
     end
+    if opts.repeatDeposit then local _,n=table.concat(messages,'\n'):gsub('Mining unfamiliar block: mod:ore','');assert(n>=2,'Later deposit of same block did not show ID') end
+    if opts.slowProgress then assert(table.concat(messages,'\n'):find('Mining unfamiliar block: mod:ore',1,true),'Standalone collection omitted block ID') end
     if opts.collectionLimit then assert(table.concat(messages,'\n'):find('Collection limit reached:',1,true),'Collection limit reason missing') end
     if opts.searchDepth then assert(table.concat(messages,'\n'):find('Search depth limit reached:',1,true),'Search depth reason missing') end
     if opts.vanillaOre then assert(table.concat(messages,'\n'):find('Vein collected: 3 blocks.',1,true),'Vanilla ore summary missing') end
@@ -652,6 +655,7 @@ check('Mining and navigation 2',{protected=true})
 check('Mining and navigation 3',{full=true})
 check('Mining and navigation 4',{slowProgress=true})
 check('Readable vanilla ore summary',{vanillaOre=true})
+check('Repeated unfamiliar deposit ID',{repeatDeposit=true})
 check('Collection limit message',{collectionLimit=2})
 check('Search depth limit message',{searchDepth=1})
 check('Mining and navigation 5',{width=16,length=16,depth=6})

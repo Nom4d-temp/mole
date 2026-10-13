@@ -1,6 +1,6 @@
--- Mole v1.6.14: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.15: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.14'
+local VERSION='1.6.15'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -247,7 +247,7 @@ end
 function net.isOre(id) return id:match('^minecraft:.*_ore$') or id=='minecraft:ancient_debris' end
 function net.blocks(n) return n..' block'..(n==1 and '' or 's') end
 function net.mining(block)
-  if not net.active or c.trash[block.name] or net.isOre(block.name) or net.lastBlock==block.name then return end
+  if c.trash[block.name] or net.isOre(block.name) or net.lastBlock==block.name then return end
   net.lastBlock=block.name
   log('Mining unfamiliar block: '..block.name)
   net.flush()
@@ -1232,7 +1232,7 @@ local function scanFrame(p)
   return {p=copy(p),next=0,order={4,5,d,(d+1)%4,(d+2)%4,(d+3)%4}}
 end
 local function vein()
-  if not s.vein then s.vein={stack={scanFrame(s.p)},count=0}; save() end
+  if not s.vein then net.lastBlock=nil;s.vein={stack={scanFrame(s.p)},count=0}; save() end
   while #s.vein.stack>0 do
     net.raiseReturn()
     local v=s.vein; local f=v.stack[#v.stack]
