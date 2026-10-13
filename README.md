@@ -105,6 +105,8 @@ During normal returns, position recovery, and emergency escape, Mole checks its 
 
 ## Optional Mole Companion
 
+For more information, including installation and setup, visit the [Mole Companion GitHub repository](https://github.com/Nom4d-temp/mole-companion).
+
 Mole works normally without a modem or companion. If you want to watch it from a computer and monitor, use the separate **Mole Companion** program, then enable the connection here:
 
 1. Equip the turtle with a **wireless or Ender modem**, keeping its pickaxe equipped.
