@@ -107,7 +107,7 @@ During normal returns, position recovery, and emergency escape, Mole checks its 
 
 For more information, including installation and setup, visit the [Mole Companion GitHub repository](https://github.com/Nom4d-temp/mole-companion).
 
-Mole works normally without a modem or companion. If you want to watch it from a computer and monitor, use the separate **Mole Companion** program, then enable the connection here:
+Keep an eye on your quarry without standing beside the turtle. **Mole Companion** lets you follow mining progress, check fuel and inventory, and request a safe return—all from a CC:Tweaked computer and monitor. It’s a completely optional addition to Mole, and setup takes just a few guided steps:
 
 1. Equip the turtle with a **wireless or Ender modem**, keeping its pickaxe equipped.
 2. Run `companion pair` on a nearby computer with a monitor and wireless/Ender modem. This opens guided pairing.
