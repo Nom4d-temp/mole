@@ -192,6 +192,7 @@ local function scenario(opts)
     trash={['minecraft:stone']=true},protected={['minecraft:chest']=true,['minecraft:bedrock']=true}}
   if opts.oldFuelSchema then c.fuelSchemaVersion=nil;c.fuel['minecraft:lava_bucket']=nil;if opts.disableLava then c.fuel['minecraft:lava_bucket']=false end end
   if not opts.defaultConfig then files['quarry-data/config']=textutils.serialize(c) end
+  local listenerFailures=0
   local pingAttempts=0
   local pingNonce
   local wirelessPackets={};local wirelessClock=1000;local wirelessRequest;local injectedWireless=false
@@ -205,7 +206,8 @@ local function scenario(opts)
     peripheral.isPresent=function(side) if side=='left' then return not (opts.networkDetach and actions>=3) end;return oldPresent(side) end
     os.epoch=function() return wirelessClock*1000 end;os.getComputerID=function() return 4 end
     os.getComputerLabel=function() return 'Test Mole' end
-    os.pullEvent=function() coroutine.yield('idle') end
+    os.startTimer=function(seconds) assert(seconds==3);return 42 end
+    os.pullEvent=function() coroutine.yield('idle');wirelessClock=wirelessClock+3;return 'timer',42 end
     rednet={open=function(side) assert(side=='left') end,
       send=function(id,msg,protocol)
         if opts.networkCheck then assert(msg.kind=='ping');pingAttempts=pingAttempts+1;pingNonce=msg.nonce;return true end
@@ -220,7 +222,7 @@ local function scenario(opts)
       receive=function()
         if opts.networkCheck then wirelessClock=wirelessClock+1;if opts.lostPing and pingAttempts<2 then return nil end;return 7,{v=1,kind='pong',token='test-network-token',nonce=pingNonce},'mole-companion/1' end
         if opts.pairMenu then wirelessClock=wirelessClock+1;local saved=textutils.unserialize(files['quarry-data/companion']);return opts.badPairSender and 99 or 7,{v=1,kind=saved.enabled and 'pair_verified' or 'paired',code='123456',station=7,token='new-pair-token'},'mole-companion/1' end
-        if opts.networkReceiveThrow then error('Listener failed') end
+        if opts.networkReceiveThrow or opts.networkReceiveOnce and listenerFailures==0 then listenerFailures=listenerFailures+1;error('Listener failed') end
         coroutine.yield('receive');wirelessClock=wirelessClock+0.2
         if (opts.networkReturn or opts.networkRecoveryReturn or opts.networkEmergencyReturn or opts.networkBadSender or opts.networkBadAction) and not injectedWireless and actions>=3 and checkpointState().phase==(opts.networkRecoveryReturn and 'recovery' or opts.networkEmergencyReturn and 'emergency' or 'work') then
           injectedWireless=true
@@ -257,9 +259,9 @@ local function scenario(opts)
     files['quarry-data/previous-job']='previous job'
     if not opts.existingStartup then files['startup.lua']='-- Automatically resume the saved mining job.\nshell.run("mole")\n' end
     local before=clone(files)
-    local source=program:gsub('1%.6%.13','9.0.0')
+    local source=program:gsub('1%.6%.14','9.0.0')
     if opts.updateSame then source=program end
-    if opts.updateOlder then source=program:gsub('1%.6%.13','0.9.9') end
+    if opts.updateOlder then source=program:gsub('1%.6%.14','0.9.9') end
     if opts.updateBad then source='not a program' end
     if opts.updateSyntax then source='-- Mole v9.0.0\nlocal =' end
     local closed=false
@@ -602,6 +604,7 @@ local function scenario(opts)
   if opts.network and not opts.networkReturn and not opts.crashAfter and not opts.networkSendThrow and not opts.networkReceiveThrow and not opts.networkDetach then
     local found=false;for _,packet in ipairs(wirelessPackets) do if packet.kind=='discovery' and packet.block=='mod:ore' then found=true end end
     assert(found,'Unknown mined block was not reported')
+    if opts.networkReceiveOnce then assert(listenerFailures==1 and table.concat(messages,'\n'):find('Companion reporting restarted.',1,true),'Listener did not recover after temporary error') end
     local moving=false
     for _,packet in ipairs(wirelessPackets) do
       if packet.kind=='status' and packet.phase~='Recovering position' and packet.phase~='Emergency escape' and packet.phase~='Waiting for retrieval' then
@@ -788,6 +791,7 @@ check('Remote return and duplicate requests',{network=true,networkReturn=true})
 check('Accepted remote return survives interrupted movement',{network=true,networkReturn=true,networkAcceptedCrash=true,crashAfter=true})
 check('Wireless send failure keeps mining',{network=true,networkSendThrow=true})
 check('Wireless listener failure keeps mining',{network=true,networkReceiveThrow=true})
+check('Wireless listener reconnects after temporary failure',{network=true,networkReceiveOnce=true})
 check('Modem detach keeps mining',{network=true,networkDetach=true})
 check('Disabled wireless never probes hardware',{networkDisabled=true})
 check('Companion menu missing modem',{companionMenu={'1','q'}})

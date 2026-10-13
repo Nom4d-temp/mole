@@ -1,6 +1,6 @@
--- Mole v1.6.13: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.14: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.13'
+local VERSION='1.6.14'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -282,28 +282,35 @@ function net.run(main)
   end
   if not parallel or not parallel.waitForAny or not os.pullEvent or not rednet then return mining() end
   local function listener()
-    local ok,why=pcall(function()
-      local nextStatus=0;local replayAt=0
-      while true do
-        if net.modemName and not peripheral.isPresent(net.modemName) then net.active=false end
-        if not net.active then local found,name=pcall(net.modem);if found and name then net.active=true;net.modemName=name;net.session=net.session or tostring(net.clock())..'-'..os.getComputerID();nextStatus=0 end end
-        if net.active then
-          if net.clock()>=nextStatus then net.status();nextStatus=net.clock()+5 end
-          if net.clock()>=replayAt then
-            if replayAt==0 and s.companionReturn then net.receipt(s.companionReturn.id,s.companionReturn.result,s.companionReturn.detail) end
-            net.replay();replayAt=net.clock()+15
+    local retrying=false
+    while true do
+      local ok,why=pcall(function()
+        local nextStatus=0;local replayAt=0
+        while true do
+          if net.modemName and not peripheral.isPresent(net.modemName) then net.active=false end
+          if not net.active then local found,name=pcall(net.modem);if found and name then net.active=true;net.modemName=name;net.session=net.session or tostring(net.clock())..'-'..os.getComputerID();nextStatus=0 end end
+          if net.active then
+            if net.clock()>=nextStatus then net.status();nextStatus=net.clock()+5 end
+            if net.clock()>=replayAt then
+              if replayAt==0 and s.companionReturn then net.receipt(s.companionReturn.id,s.companionReturn.result,s.companionReturn.detail) end
+              net.replay();replayAt=net.clock()+15
+            end
+            net.flush()
           end
-          net.flush()
+          local id,msg,protocol=rednet.receive(net.protocol,1)
+          if retrying and net.active then pcall(nativePrint,'[Mole] Companion reporting restarted.');retrying=false end
+          if id then net.handle(id,msg,protocol) end
         end
-        local id,msg,protocol=rednet.receive(net.protocol,1)
-        if id then net.handle(id,msg,protocol) end
-      end
-    end)
-    if not ok and tostring(why)=='Terminated' then error(why,0) end
-    net.active=false
-    pcall(nativePrint,'[Mole] Companion link stopped. Mining continues.')
-    -- A failed listener must not finish waitForAny and cancel the miner.
-    while true do os.pullEvent() end
+      end)
+      if not ok and tostring(why)=='Terminated' then error(why,0) end
+      net.active=false
+      if not retrying then pcall(nativePrint,'[Mole] Companion reporting interrupted. Retrying; mining continues.') end
+      retrying=true
+      -- Yield during persistent failures without ending waitForAny or
+      -- cancelling mining. pullEvent preserves normal Ctrl+T handling.
+      local retryTimer=os.startTimer(3)
+      repeat local event,id=os.pullEvent() until event=='timer' and id==retryTimer
+    end
   end
   return parallel.waitForAny(mining,listener)
 end
