@@ -1,6 +1,6 @@
--- Mole v1.6.12: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
+-- Mole v1.6.13: guided setup, selective tunnels, local coordinates, durable checkpoints, bounded vein mining.
 -- Origin is the turtle's starting block. +Z is forward, +X is right, Y is down.
-local VERSION='1.6.12'
+local VERSION='1.6.13'
 local UPDATE_URL='https://raw.githubusercontent.com/Nom4d-temp/mole/main/mole.lua'
 local argv = {...}
 local print=print -- Keep optional output capture local to this program.
@@ -90,8 +90,7 @@ local CP=ROOT..'/config'; local SP=ROOT..'/state'
 if argv[1]=='reset' then
   fs.delete(ROOT); fs.makeDir(ROOT); writeFile(CP,defaults)
   print('[Mole] Reset complete. Saved jobs, emergency data, and custom settings cleared.')
-  print('Fuel and carried items are still in the turtle. No movement was made.')
-  print('Place the turtle at your chosen start with a chest behind it, then run mole new.')
+  print("To start a new job, place the turtle with a chest behind it and type 'mole new'.")
   return
 end
 if not fs.exists(CP) then writeFile(CP, defaults) end
